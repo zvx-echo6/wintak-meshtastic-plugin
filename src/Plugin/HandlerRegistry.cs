@@ -74,7 +74,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Phase 1 handlers (Must priority)
             Register(new PositionHandler());      // POSITION_APP (3)
             Register(new NodeInfoHandler());      // NODEINFO_APP (4)
-            // Register(new TextMessageHandler());   // TEXT_MESSAGE_APP (1)
+            Register(new TextMessageHandler());   // TEXT_MESSAGE_APP (1)
 
             // Phase 1 handlers (Should priority)
             // Register(new MapReportHandler());     // MAP_REPORT_APP (73)
@@ -91,7 +91,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Register(new AlertHandler());         // ALERT_APP (226)
             // Register(new PaxcounterHandler());    // PAXCOUNTER_APP (69)
 
-            _logger?.LogInformation("Default handlers registered: POSITION_APP, NODEINFO_APP");
+            _logger?.LogInformation("Default handlers registered: POSITION_APP, NODEINFO_APP, TEXT_MESSAGE_APP");
         }
     }
 

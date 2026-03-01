@@ -65,11 +65,13 @@ namespace WinTakMeshtasticPlugin.Handlers
         public Models.INodeStateManager? NodeStateManager { get; set; }
 
         /// <summary>
+        /// The channel manager for tracking channel configuration.
+        /// </summary>
+        public Models.IChannelManager? ChannelManager { get; set; }
+
+        /// <summary>
         /// The CoT builder for generating Cursor-on-Target XML.
         /// </summary>
         public CoT.ICotBuilder? CotBuilder { get; set; }
-
-        // TODO: Add CotDispatcher reference when WinTAK SDK is available
-        // public ICotDispatcher? CotDispatcher { get; set; }
     }
 }

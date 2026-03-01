@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.Composition;
+using System.Linq;
 using System.Threading;
 using System.Xml;
 using Microsoft.Practices.Prism.MefExtensions.Modularity;
@@ -11,6 +12,7 @@ using WinTak.CursorOnTarget.Services;
 using WinTakMeshtasticPlugin.Connection;
 using WinTakMeshtasticPlugin.CoT;
 using WinTakMeshtasticPlugin.Handlers;
+using WinTakMeshtasticPlugin.Messaging;
 using WinTakMeshtasticPlugin.Models;
 
 namespace WinTakMeshtasticPlugin.Plugin
@@ -31,19 +33,34 @@ namespace WinTakMeshtasticPlugin.Plugin
         private readonly IHandlerRegistry _handlerRegistry;
         private readonly ICotBuilder _cotBuilder;
         private readonly NodeStateManager _nodeStateManager;
-        private MeshtasticTcpClient _client;
-        private CancellationTokenSource _cts;
+        private readonly ChannelManager _channelManager;
+        private readonly ChannelHandler _channelHandler;
+        private readonly PluginSettings _settings;
 
-        // Default connection settings (will be configurable via settings panel later)
-        private string _hostname = "localhost";
-        private int _port = 4403;
-        private int _reconnectIntervalSeconds = 15;
-        private bool _autoConnect = false;
+        private MeshtasticTcpClient? _client;
+        private OutboundMessageService? _outboundMessageService;
+        private CancellationTokenSource? _cts;
+        private TextMessageHandler? _textMessageHandler;
 
         /// <summary>
         /// Current connection state for UI binding.
         /// </summary>
         public ConnectionState ConnectionState => _client?.State ?? ConnectionState.Disconnected;
+
+        /// <summary>
+        /// The channel manager for tracking Meshtastic channel configuration.
+        /// </summary>
+        public IChannelManager ChannelManager => _channelManager;
+
+        /// <summary>
+        /// The plugin settings.
+        /// </summary>
+        public PluginSettings Settings => _settings;
+
+        /// <summary>
+        /// The outbound message service for sending messages to the mesh.
+        /// </summary>
+        public IOutboundMessageService? OutboundMessageService => _outboundMessageService;
 
         /// <summary>
         /// MEF constructor with dependency injection.
@@ -63,9 +80,23 @@ namespace WinTakMeshtasticPlugin.Plugin
             _locationService = locationService ?? throw new ArgumentNullException(nameof(locationService));
             _communicationService = communicationService ?? throw new ArgumentNullException(nameof(communicationService));
 
+            // Load settings from disk
+            _settings = PluginSettings.Load();
+
             _handlerRegistry = new HandlerRegistry();
             _cotBuilder = new CotBuilder();
             _nodeStateManager = new NodeStateManager();
+            _channelManager = new ChannelManager();
+            _channelHandler = new ChannelHandler(_channelManager);
+
+            // Apply saved channel receive settings
+            foreach (var kvp in _settings.ChannelReceiveEnabled)
+            {
+                _channelManager.SetReceiveEnabled(kvp.Key, kvp.Value);
+            }
+
+            // Apply saved outbound channel selection
+            _channelManager.SelectedOutboundChannel = _settings.SelectedOutboundChannel;
         }
 
         /// <summary>
@@ -83,6 +114,16 @@ namespace WinTakMeshtasticPlugin.Plugin
                 // Register packet handlers for each supported portnum
                 _handlerRegistry.RegisterDefaultHandlers();
 
+                // Get reference to TextMessageHandler for event wiring
+                _textMessageHandler = _handlerRegistry.GetHandler(Meshtastic.Protobufs.PortNum.TextMessageApp) as TextMessageHandler;
+                if (_textMessageHandler != null)
+                {
+                    _textMessageHandler.MessageReceived += OnTextMessageReceived;
+                }
+
+                // Subscribe to channel changes to persist settings
+                _channelManager.ChannelChanged += OnChannelChanged;
+
                 // Subscribe to CoT messages to capture outbound operator PLI
                 _cotMessageReceiver.MessageReceived += OnCotMessageReceived;
 
@@ -93,14 +134,11 @@ namespace WinTakMeshtasticPlugin.Plugin
                 _nodeStateManager.NodeStateChanged += OnNodeStateChanged;
                 _nodeStateManager.NodeRemoved += OnNodeRemoved;
 
-                // TODO: Load settings from JSON file
-                // LoadSettings();
-
                 // Auto-connect if enabled in settings
-                if (_autoConnect && !string.IsNullOrEmpty(_hostname))
+                if (_settings.AutoConnect && !string.IsNullOrEmpty(_settings.Hostname))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Meshtastic] Auto-connecting to {_hostname}:{_port}");
-                    ConnectAsync(_hostname, _port);
+                    System.Diagnostics.Debug.WriteLine($"[Meshtastic] Auto-connecting to {_settings.Hostname}:{_settings.Port}");
+                    ConnectAsync(_settings.Hostname, _settings.Port);
                 }
 
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initialized successfully");
@@ -110,6 +148,48 @@ namespace WinTakMeshtasticPlugin.Plugin
                 System.Diagnostics.Debug.WriteLine($"[Meshtastic] Plugin initialization failed: {ex.Message}");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Handle text message received from mesh.
+        /// Routes to channel-specific chat rooms (MSG-02).
+        /// </summary>
+        private void OnTextMessageReceived(object? sender, TextMessageReceivedEventArgs e)
+        {
+            // Check if this channel is enabled for receive (CHN-03)
+            if (!(_channelManager as ChannelManager)?.IsReceiveEnabled(e.ChannelIndex) ?? false)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Meshtastic] Message dropped - channel {e.ChannelIndex} receive disabled");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Meshtastic] Chat message from {e.SenderCallsign} to {e.ChatRoom}: {e.Message}");
+
+            // CoT injection is handled by the TextMessageHandler result
+            // This event is for additional processing like chat window updates
+        }
+
+        /// <summary>
+        /// Handle channel configuration received from mesh.
+        /// </summary>
+        private void OnChannelReceived(object? sender, ChannelReceivedEventArgs e)
+        {
+            _channelHandler.HandleChannel(e.Channel);
+        }
+
+        /// <summary>
+        /// Handle channel state changes for settings persistence.
+        /// </summary>
+        private void OnChannelChanged(object? sender, ChannelChangedEventArgs e)
+        {
+            // Persist channel receive enabled state
+            _settings.ChannelReceiveEnabled[e.Channel.Index] = e.Channel.ReceiveEnabled;
+            _settings.SelectedOutboundChannel = _channelManager.SelectedOutboundChannel;
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Meshtastic] Channel {e.Channel.Index} changed - persist settings");
         }
 
         private void OnNodeStateChanged(object sender, NodeStateChangedEventArgs e)
@@ -241,31 +321,44 @@ namespace WinTakMeshtasticPlugin.Plugin
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting existing connection...");
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
+                _client.ChannelReceived -= OnChannelReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
+                _outboundMessageService = null;
             }
 
+            // Clear channel state on new connection
+            _channelManager.Clear();
+
             // Store current settings
-            _hostname = hostname;
-            _port = port;
+            _settings.Hostname = hostname;
+            _settings.Port = port;
 
             var config = new MeshtasticClientConfig
             {
                 Hostname = hostname,
                 Port = port,
-                ReconnectIntervalSeconds = _reconnectIntervalSeconds
+                ReconnectIntervalSeconds = _settings.ReconnectIntervalSeconds
             };
 
             System.Diagnostics.Debug.WriteLine($"[Meshtastic] Connecting to {hostname}:{port}...");
 
             _client = new MeshtasticTcpClient(config);
             _client.PacketReceived += OnPacketReceived;
+            _client.ChannelReceived += OnChannelReceived;
             _client.StateChanged += OnConnectionStateChanged;
+
+            // Create outbound message service
+            _outboundMessageService = new OutboundMessageService(_client, _channelManager);
+            _outboundMessageService.MessageSent += OnOutboundMessageSent;
 
             try
             {
-                await _client.ConnectAsync(_cts.Token);
+                if (_cts != null)
+                {
+                    await _client.ConnectAsync(_cts.Token);
+                }
             }
             catch (Exception ex)
             {
@@ -274,14 +367,23 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
+        /// Handle outbound message sent event (for local echo).
+        /// </summary>
+        private void OnOutboundMessageSent(object? sender, OutboundMessageSentEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[Meshtastic] Sent message to channel {e.ChannelName}: {e.Message}");
+        }
+
+        /// <summary>
         /// Update connection settings.
         /// </summary>
         public void UpdateSettings(string hostname, int port, int reconnectIntervalSeconds, bool autoConnect)
         {
-            _hostname = hostname;
-            _port = port;
-            _reconnectIntervalSeconds = Math.Clamp(reconnectIntervalSeconds, 5, 60);
-            _autoConnect = autoConnect;
+            _settings.Hostname = hostname;
+            _settings.Port = port;
+            _settings.ReconnectIntervalSeconds = Math.Clamp(reconnectIntervalSeconds, 5, 60);
+            _settings.AutoConnect = autoConnect;
         }
 
         /// <summary>
@@ -294,9 +396,17 @@ namespace WinTakMeshtasticPlugin.Plugin
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting...");
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
+                _client.ChannelReceived -= OnChannelReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
+
+                if (_outboundMessageService != null)
+                {
+                    _outboundMessageService.MessageSent -= OnOutboundMessageSent;
+                    _outboundMessageService = null;
+                }
+
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnected");
             }
         }
@@ -308,16 +418,41 @@ namespace WinTakMeshtasticPlugin.Plugin
         {
             System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin shutting down...");
 
+            // Save settings before shutdown
+            try
+            {
+                _settings.Validate();
+                _settings.Save();
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Settings saved");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Failed to save settings: {ex.Message}");
+            }
+
             _cts?.Cancel();
 
             if (_client != null)
             {
                 _client.PacketReceived -= OnPacketReceived;
+                _client.ChannelReceived -= OnChannelReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
             }
 
+            if (_outboundMessageService != null)
+            {
+                _outboundMessageService.MessageSent -= OnOutboundMessageSent;
+                _outboundMessageService = null;
+            }
+
+            if (_textMessageHandler != null)
+            {
+                _textMessageHandler.MessageReceived -= OnTextMessageReceived;
+            }
+
+            _channelManager.ChannelChanged -= OnChannelChanged;
             _cotMessageReceiver.MessageReceived -= OnCotMessageReceived;
             _locationService.PositionChanged -= OnOperatorPositionChanged;
             _nodeStateManager.NodeStateChanged -= OnNodeStateChanged;
@@ -341,6 +476,19 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// </summary>
         public int NodeCount => _nodeStateManager.Count;
 
+        /// <summary>
+        /// Create a SettingsViewModel for the settings UI panel.
+        /// </summary>
+        public UI.SettingsViewModel CreateSettingsViewModel()
+        {
+            return new UI.SettingsViewModel(
+                _settings,
+                _channelManager,
+                ConnectAsync,
+                DisconnectAsync,
+                () => NodeCount);
+        }
+
         private async void OnPacketReceived(object sender, MeshPacketReceivedEventArgs e)
         {
             // Get the handler for this packet's portnum
@@ -363,6 +511,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             {
                 ConnectionId = e.ConnectionId,
                 NodeStateManager = _nodeStateManager,
+                ChannelManager = _channelManager,
                 CotBuilder = _cotBuilder
             };
 

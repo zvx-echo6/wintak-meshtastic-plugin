@@ -234,4 +234,26 @@ namespace WinTakMeshtasticPlugin.Tests.Connection
             args.ConnectionId.Should().Be(connectionId);
         }
     }
+
+    public class ChannelReceivedEventArgsTests
+    {
+        [Fact]
+        public void Constructor_SetsProperties()
+        {
+            // Arrange
+            var channel = new Meshtastic.Protobufs.Channel
+            {
+                Index = 0,
+                Role = Meshtastic.Protobufs.Channel.Types.Role.Primary
+            };
+            var connectionId = "testconn";
+
+            // Act
+            var args = new ChannelReceivedEventArgs(channel, connectionId);
+
+            // Assert
+            args.Channel.Should().BeSameAs(channel);
+            args.ConnectionId.Should().Be(connectionId);
+        }
+    }
 }

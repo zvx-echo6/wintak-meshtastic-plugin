@@ -56,6 +56,11 @@ namespace WinTakMeshtasticPlugin.Connection
         public event EventHandler<MeshPacketReceivedEventArgs>? PacketReceived;
 
         /// <summary>
+        /// Event raised when a Channel config is received from FromRadio.
+        /// </summary>
+        public event EventHandler<ChannelReceivedEventArgs>? ChannelReceived;
+
+        /// <summary>
         /// Event raised when connection state changes.
         /// </summary>
         public event EventHandler<ConnectionStateChangedEventArgs>? StateChanged;
@@ -209,19 +214,27 @@ namespace WinTakMeshtasticPlugin.Connection
                         var fromRadio = FromRadio.Parser.ParseFrom(dataBuffer);
                         _lastPacketTime = DateTime.UtcNow;
 
-                        // Extract MeshPacket if present
-                        if (fromRadio.PayloadVariantCase == FromRadio.PayloadVariantOneofCase.Packet)
+                        // Handle different FromRadio payload types
+                        switch (fromRadio.PayloadVariantCase)
                         {
-                            var packet = fromRadio.Packet;
-                            _logger?.LogDebug("Received MeshPacket from node {NodeId:X8}, portnum {PortNum}",
-                                packet.From, packet.Decoded?.Portnum);
+                            case FromRadio.PayloadVariantOneofCase.Packet:
+                                var packet = fromRadio.Packet;
+                                _logger?.LogDebug("Received MeshPacket from node {NodeId:X8}, portnum {PortNum}",
+                                    packet.From, packet.Decoded?.Portnum);
+                                PacketReceived?.Invoke(this, new MeshPacketReceivedEventArgs(packet, ConnectionId));
+                                break;
 
-                            PacketReceived?.Invoke(this, new MeshPacketReceivedEventArgs(packet, ConnectionId));
-                        }
-                        else
-                        {
-                            _logger?.LogDebug("Received FromRadio with payload type: {Type}",
-                                fromRadio.PayloadVariantCase);
+                            case FromRadio.PayloadVariantOneofCase.Channel:
+                                var channel = fromRadio.Channel;
+                                _logger?.LogDebug("Received Channel config: index={Index}, role={Role}",
+                                    channel.Index, channel.Role);
+                                ChannelReceived?.Invoke(this, new ChannelReceivedEventArgs(channel, ConnectionId));
+                                break;
+
+                            default:
+                                _logger?.LogDebug("Received FromRadio with payload type: {Type}",
+                                    fromRadio.PayloadVariantCase);
+                                break;
                         }
                     }
                     catch (InvalidProtocolBufferException ex)
@@ -404,9 +417,25 @@ namespace WinTakMeshtasticPlugin.Connection
         string ConnectionId { get; }
         ConnectionState State { get; }
         event EventHandler<MeshPacketReceivedEventArgs>? PacketReceived;
+        event EventHandler<ChannelReceivedEventArgs>? ChannelReceived;
         event EventHandler<ConnectionStateChangedEventArgs>? StateChanged;
         Task ConnectAsync(CancellationToken cancellationToken = default);
         Task DisconnectAsync();
         Task SendPacketAsync(MeshPacket packet, CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>
+    /// Event args for Channel received events.
+    /// </summary>
+    public class ChannelReceivedEventArgs : EventArgs
+    {
+        public Channel Channel { get; }
+        public string ConnectionId { get; }
+
+        public ChannelReceivedEventArgs(Channel channel, string connectionId)
+        {
+            Channel = channel;
+            ConnectionId = connectionId;
+        }
     }
 }
