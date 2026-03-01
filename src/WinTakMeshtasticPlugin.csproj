@@ -65,8 +65,11 @@
       <WinTakPluginsDir>$(APPDATA)\wintak\plugins\$(AssemblyName)</WinTakPluginsDir>
     </PropertyGroup>
     <MakeDir Directories="$(WinTakPluginsDir)" />
+    <!-- Copy main assembly -->
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(WinTakPluginsDir)" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    <!-- Copy dependencies not provided by WinTAK -->
+    <Copy SourceFiles="$(TargetDir)Google.Protobuf.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Google.Protobuf.dll')" />
     <Message Text="Deployed $(AssemblyName) to $(WinTakPluginsDir)" Importance="high" />
   </Target>
 
