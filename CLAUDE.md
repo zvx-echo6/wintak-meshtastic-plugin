@@ -20,10 +20,54 @@ Full requirements: docs/wintak-meshtastic-plugin-requirements.docx and docs/wint
 - `WinTak.Framework` — Plugin attributes (TakSdkVersion, PluginName, PluginDescription, PluginIcon)
 - `WinTak.Framework.Docking` — DockPane, IDockingManager, DockPaneStartupMode
 - `WinTak.Framework.Tools` — Button base class for ribbon bar buttons
+- `WinTak.CursorOnTarget.Services` — ICotMessageSender, ICotMessageReceiver (CoT injection)
+- `WinTak.Common.Services` — ICommunicationService, ILocationService
+- `WinTak.Common.CoT` — CoTMessageArgument, CotEvent
 - `Microsoft.Practices.Prism.MefExtensions.Modularity` — ModuleExport attribute
 - `Microsoft.Practices.Prism.Modularity` — IModule interface
 - `Microsoft.Practices.Prism.PubSubEvents` — IEventAggregator for pub/sub messaging
 - `Microsoft.Practices.Prism.Commands` — DelegateCommand for MVVM
+
+## CoT Injection API (Confirmed Phase 0)
+Inject mesh node positions into WinTAK map:
+```csharp
+[ImportingConstructor]
+public MyClass(ICotMessageSender cotMessageSender) { _sender = cotMessageSender; }
+
+// Inject CoT event - marker appears on map
+var xmlDoc = new XmlDocument();
+xmlDoc.LoadXml(cotXmlString);
+_sender.Send(xmlDoc);
+```
+
+Receive CoT events (for outbound PLI capture):
+```csharp
+[ImportingConstructor]
+public MyClass(ICotMessageReceiver receiver) {
+    receiver.MessageReceived += (s, args) => {
+        var cotEvent = args.CotEvent;  // Parsed event
+        var type = args.Type;          // e.g., "a-f-G-U-C"
+    };
+}
+```
+
+Get operator position (for mesh outbound PLI):
+```csharp
+[ImportingConstructor]
+public MyClass(ILocationService locationService) {
+    var pos = locationService.GetGpsPosition();      // GeoPoint with Lat/Lon
+    var selfCot = locationService.GetSelfCotEvent(); // Operator's CoT event
+    locationService.PositionChanged += OnPositionChanged;
+}
+```
+
+Team colors in CoT XML (set via `__group` element):
+```xml
+<detail>
+    <contact callsign="NODE-NAME"/>
+    <__group name="Cyan" role="Team Member"/>
+</detail>
+```
 
 ## Commands
 - `dotnet build src/` : Build the plugin (auto-deploys to %appdata%\wintak\plugins\)
