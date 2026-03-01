@@ -68,6 +68,8 @@ TestResult.xml
 
 # Project-specific
 proto/generated.bak/
+proto/protoc-bin/
+proto/protoc.zip
 deploy/
 
 # Claude Code

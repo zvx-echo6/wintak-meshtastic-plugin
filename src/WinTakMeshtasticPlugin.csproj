@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinTAK requires .NET Framework 4.8.1, x64 platform -->
+    <TargetFramework>net481</TargetFramework>
+    <OutputType>Library</OutputType>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>WinTakMeshtasticPlugin</RootNamespace>
+    <AssemblyName>WinTakMeshtasticPlugin</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Echo6 TAK Team</Authors>
+    <Company>Echo6</Company>
+    <Product>WinTAK Meshtastic Plugin</Product>
+    <Description>Native WinTAK plugin for Meshtastic mesh network integration</Description>
+    <Copyright>Copyright (c) 2026 Echo6</Copyright>
+  </PropertyGroup>
+
+  <!-- Debug configuration - attach to WinTAK -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Program Files\WinTAK\WinTAK.exe</StartProgram>
+    <StartWorkingDirectory>C:\Program Files\WinTAK</StartWorkingDirectory>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinTAK SDK - from C:\Program Files\WinTAK\NuGet local source -->
+    <!-- WinTak-Dependencies includes: TAK.Kernel, Prism.Core, Angle-Dist, libLAS, TTP-Dist -->
+    <PackageReference Include="WinTak-Dependencies" Version="*" />
+    <PackageReference Include="Prism.Mef" Version="*" />
+
+    <!-- MEF for plugin composition -->
+    <PackageReference Include="System.ComponentModel.Composition" Version="8.0.0" />
+
+    <!-- Protobuf support -->
+    <PackageReference Include="Google.Protobuf" Version="3.25.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Include generated protobuf classes -->
+    <Compile Include="..\proto\generated\**\*.cs" LinkBase="Proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Plugin assets - Build Action must be Resource for button icons -->
+    <Resource Include="Assets\**\*.png" />
+    <Resource Include="Assets\**\*.svg" />
+  </ItemGroup>
+
+  <!-- Post-build: Deploy to WinTAK plugins folder -->
+  <Target Name="DeployToWinTAK" AfterTargets="Build">
+    <PropertyGroup>
+      <WinTakPluginsDir>$(APPDATA)\wintak\plugins\$(AssemblyName)</WinTakPluginsDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(WinTakPluginsDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(WinTakPluginsDir)" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    <Message Text="Deployed $(AssemblyName) to $(WinTakPluginsDir)" Importance="high" />
+  </Target>
+
+</Project>

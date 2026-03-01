@@ -1,0 +1,275 @@
+using System;
+using System.Security;
+using System.Text;
+using System.Xml;
+using WinTakMeshtasticPlugin.Models;
+
+namespace WinTakMeshtasticPlugin.CoT
+{
+    /// <summary>
+    /// Builder for Cursor-on-Target (CoT) XML messages.
+    /// All CoT must validate against TAK 5.x schema.
+    /// </summary>
+    public class CotBuilder : ICotBuilder
+    {
+        /// <summary>
+        /// Default stale time for node PLI: 30 minutes.
+        /// </summary>
+        public static readonly TimeSpan DefaultStaleTime = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// Build a Position Location Information (PLI) CoT event for a mesh node.
+        /// </summary>
+        /// <param name="nodeState">The node state with position and identity info.</param>
+        /// <param name="staleTime">How long until the event goes stale. Default: 30 minutes.</param>
+        /// <returns>CoT XML string.</returns>
+        public string BuildNodePli(NodeState nodeState, TimeSpan? staleTime = null)
+        {
+            if (nodeState == null)
+                throw new ArgumentNullException(nameof(nodeState));
+
+            if (!nodeState.Latitude.HasValue || !nodeState.Longitude.HasValue)
+                throw new ArgumentException("Node must have position data", nameof(nodeState));
+
+            var effectiveStaleTime = staleTime ?? DefaultStaleTime;
+            var now = DateTime.UtcNow;
+            var staleAt = now + effectiveStaleTime;
+
+            // Get CoT type based on device role (per CLAUDE.md)
+            var cotType = GetCotTypeForRole(nodeState.Role);
+
+            // Generate unique event UID from connection and node ID
+            var uid = $"MESH-{nodeState.ConnectionId}-{nodeState.NodeId:X8}";
+
+            // Callsign: shortname or hex ID (SEC-07: XML-escape all mesh strings)
+            var callsign = XmlEscape(nodeState.DisplayName);
+
+            var sb = new StringBuilder();
+            sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            sb.Append("<event version=\"2.0\"");
+            sb.AppendFormat(" uid=\"{0}\"", uid);
+            sb.AppendFormat(" type=\"{0}\"", cotType);
+            sb.AppendFormat(" time=\"{0}\"", FormatCotTime(now));
+            sb.AppendFormat(" start=\"{0}\"", FormatCotTime(now));
+            sb.AppendFormat(" stale=\"{0}\"", FormatCotTime(staleAt));
+            sb.Append(" how=\"m-g\""); // Machine-generated
+            sb.Append(">");
+
+            // Point element with position
+            sb.Append("<point");
+            sb.AppendFormat(" lat=\"{0}\"", nodeState.Latitude.Value.ToString("F7"));
+            sb.AppendFormat(" lon=\"{0}\"", nodeState.Longitude.Value.ToString("F7"));
+            sb.AppendFormat(" hae=\"{0}\"", nodeState.Altitude?.ToString("F1") ?? "9999999");
+            sb.Append(" ce=\"9999999\" le=\"9999999\"/>"); // Unknown accuracy
+
+            // Detail element
+            sb.Append("<detail>");
+
+            // Contact with callsign
+            sb.AppendFormat("<contact callsign=\"{0}\"/>", callsign);
+
+            // Team color based on channel membership
+            var teamColor = GetTeamColorForChannel(nodeState.PrimaryChannel);
+            sb.AppendFormat("<__group name=\"{0}\" role=\"Team Member\"/>", teamColor);
+
+            // Track element (no course/speed for now)
+            sb.Append("<track course=\"0\" speed=\"0\"/>");
+
+            // Precisionlocation for GPS fix info
+            sb.Append("<precisionlocation altsrc=\"UNKNOWN\" geopointsrc=\"GPS\"/>");
+
+            // Remarks with node info (excluding PSK per SEC-04)
+            var remarks = BuildRemarksText(nodeState);
+            if (!string.IsNullOrEmpty(remarks))
+            {
+                sb.AppendFormat("<remarks>{0}</remarks>", XmlEscape(remarks));
+            }
+
+            // Custom mesh node metadata
+            sb.Append("<__meshtastic>");
+            sb.AppendFormat("<nodeId>{0}</nodeId>", nodeState.NodeIdHex);
+            if (!string.IsNullOrEmpty(nodeState.LongName))
+                sb.AppendFormat("<longName>{0}</longName>", XmlEscape(nodeState.LongName));
+            if (!string.IsNullOrEmpty(nodeState.HardwareModel))
+                sb.AppendFormat("<hardware>{0}</hardware>", XmlEscape(nodeState.HardwareModel));
+            if (!string.IsNullOrEmpty(nodeState.FirmwareVersion))
+                sb.AppendFormat("<firmware>{0}</firmware>", XmlEscape(nodeState.FirmwareVersion));
+            sb.AppendFormat("<role>{0}</role>", nodeState.Role);
+            sb.AppendFormat("<lastHeard>{0}</lastHeard>", FormatCotTime(nodeState.LastHeard));
+            sb.Append("</__meshtastic>");
+
+            sb.Append("</detail>");
+            sb.Append("</event>");
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Build a GeoChat CoT event for a text message.
+        /// </summary>
+        public string BuildGeoChat(
+            string senderUid,
+            string senderCallsign,
+            string message,
+            string? chatRoom = null,
+            string? destinationUid = null)
+        {
+            var now = DateTime.UtcNow;
+            var staleAt = now + TimeSpan.FromMinutes(5);
+            var messageId = Guid.NewGuid().ToString();
+
+            // SEC-07: Sanitize all string input
+            senderCallsign = XmlEscape(senderCallsign);
+            message = XmlEscape(message);
+            chatRoom = chatRoom != null ? XmlEscape(chatRoom) : null;
+
+            var sb = new StringBuilder();
+            sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            sb.Append("<event version=\"2.0\"");
+            sb.AppendFormat(" uid=\"GeoChat.{0}.{1}\"", senderUid, messageId);
+            sb.Append(" type=\"b-t-f\""); // Broadcast-text-freeform
+            sb.AppendFormat(" time=\"{0}\"", FormatCotTime(now));
+            sb.AppendFormat(" start=\"{0}\"", FormatCotTime(now));
+            sb.AppendFormat(" stale=\"{0}\"", FormatCotTime(staleAt));
+            sb.Append(" how=\"h-g-i-g-o\">"); // Human-generated
+
+            // Point (sender's position, or 0,0 if unknown)
+            sb.Append("<point lat=\"0\" lon=\"0\" hae=\"0\" ce=\"9999999\" le=\"9999999\"/>");
+
+            sb.Append("<detail>");
+
+            // Chat element
+            sb.Append("<__chat");
+            sb.AppendFormat(" senderCallsign=\"{0}\"", senderCallsign);
+            if (!string.IsNullOrEmpty(chatRoom))
+            {
+                sb.AppendFormat(" chatroom=\"{0}\"", chatRoom);
+                sb.AppendFormat(" groupOwner=\"false\"");
+            }
+            sb.AppendFormat(" messageId=\"{0}\"", messageId);
+            sb.Append(">");
+
+            // Chat group
+            sb.AppendFormat("<chatgrp uid0=\"{0}\"", senderUid);
+            if (!string.IsNullOrEmpty(destinationUid))
+                sb.AppendFormat(" uid1=\"{0}\"", destinationUid);
+            sb.Append("/>");
+
+            sb.Append("</__chat>");
+
+            // Link to sender
+            sb.AppendFormat("<link uid=\"{0}\" type=\"a-f-G-U-C\" relation=\"p-p\"/>", senderUid);
+
+            // Remarks contains the actual message
+            sb.AppendFormat("<remarks source=\"{0}\" time=\"{1}\">{2}</remarks>",
+                senderUid, FormatCotTime(now), message);
+
+            sb.Append("</detail>");
+            sb.Append("</event>");
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Get the CoT type string for a device role.
+        /// Per CLAUDE.md CoT Schema Rules.
+        /// </summary>
+        public static string GetCotTypeForRole(DeviceRole role)
+        {
+            return role switch
+            {
+                DeviceRole.Router => "a-f-G-U-C-I",      // Infrastructure
+                DeviceRole.RouterClient => "a-f-G-U-C-I",
+                DeviceRole.Repeater => "a-f-G-U-C-I",
+                DeviceRole.Tracker => "a-f-G-E-S",       // Equipment/sensor
+                DeviceRole.TakTracker => "a-f-G-E-S",
+                DeviceRole.Sensor => "a-f-G-E-S",
+                DeviceRole.Client => "a-f-G-U-C",        // Friendly ground civilian
+                DeviceRole.ClientMute => "a-f-G-U-C",
+                DeviceRole.ClientHidden => "a-f-G-U-C",
+                DeviceRole.Tak => "a-f-G-U-C",
+                DeviceRole.LostAndFound => "a-f-G-U-C",
+                _ => "a-f-G"                             // Unknown: friendly ground unspecified
+            };
+        }
+
+        /// <summary>
+        /// Get the team color for a channel index.
+        /// Per CLAUDE.md channel-to-team-color defaults.
+        /// </summary>
+        public static string GetTeamColorForChannel(int channelIndex)
+        {
+            return channelIndex switch
+            {
+                0 => "Cyan",
+                1 => "Green",
+                2 => "Yellow",
+                3 => "Orange",
+                4 => "Red",
+                5 => "Purple",
+                6 => "White",
+                7 => "Magenta",
+                _ => "Cyan"
+            };
+        }
+
+        /// <summary>
+        /// Format a DateTime as a CoT timestamp (ISO 8601 with Z suffix).
+        /// </summary>
+        public static string FormatCotTime(DateTime time)
+        {
+            return time.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        }
+
+        /// <summary>
+        /// XML-escape a string to prevent injection attacks (SEC-07).
+        /// </summary>
+        public static string XmlEscape(string? input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return string.Empty;
+
+            return SecurityElement.Escape(input);
+        }
+
+        /// <summary>
+        /// Build remarks text for a node (telemetry summary).
+        /// Never includes PSK values (SEC-04).
+        /// </summary>
+        private static string BuildRemarksText(NodeState nodeState)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+
+            if (!string.IsNullOrEmpty(nodeState.LongName))
+                parts.Add(nodeState.LongName);
+
+            if (nodeState.DeviceTelemetry != null)
+            {
+                var tel = nodeState.DeviceTelemetry;
+                if (tel.BatteryLevel.HasValue)
+                    parts.Add($"Batt: {tel.BatteryLevel}%");
+                if (tel.Voltage.HasValue)
+                    parts.Add($"{tel.Voltage:F1}V");
+            }
+
+            if (nodeState.EnvironmentTelemetry != null)
+            {
+                var env = nodeState.EnvironmentTelemetry;
+                if (env.Temperature.HasValue)
+                    parts.Add($"Temp: {env.TemperatureFahrenheit:F1}°F");
+            }
+
+            return string.Join(" | ", parts);
+        }
+    }
+
+    /// <summary>
+    /// Interface for CoT building to support dependency injection and testing.
+    /// </summary>
+    public interface ICotBuilder
+    {
+        string BuildNodePli(NodeState nodeState, TimeSpan? staleTime = null);
+        string BuildGeoChat(string senderUid, string senderCallsign, string message,
+            string? chatRoom = null, string? destinationUid = null);
+    }
+}

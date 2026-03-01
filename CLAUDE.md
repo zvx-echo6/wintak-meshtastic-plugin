@@ -3,31 +3,85 @@
 ## Project
 C# WinTAK plugin (.dll) providing native Meshtastic mesh network integration.
 Replaces standalone Python gateway with a single DLL. No external services.
-Full requirements: docs/requirements.docx and docs/requirements-supplement.docx
+Full requirements: docs/wintak-meshtastic-plugin-requirements.docx and docs/wintak-plugin-requirements-supplement.docx
 
-## Tech Stack
-- Language: C# targeting WinTAK's .NET framework (see docs/sdk-findings/)
-- Protobuf: Google.Protobuf NuGet, classes generated from proto/meshtastic/*.proto
-- UI: WPF (WinTAK plugin panels)
-- Transport: TCP to Meshtastic node (System.Net.Sockets)
-- Build: dotnet build / MSBuild
+## Tech Stack (Confirmed Phase 0)
+- **Framework**: .NET Framework 4.8.1 (net481), x64 platform only
+- **Plugin Architecture**: MEF (Managed Extensibility Framework) via Prism.Mef
+- **Entry Point**: `IModule` with `[ModuleExport]` attribute, NOT a custom IPlugin interface
+- **UI Framework**: WPF with DockPane for dockable panels, Button for ribbon bar
+- **NuGet Source**: Local WinTAK packages at `C:\Program Files\WinTAK\NuGet`
+- **Key Packages**: WinTak-Dependencies (includes TAK.Kernel, Prism.Core), Prism.Mef
+- **Protobuf**: Google.Protobuf NuGet, classes generated from proto/meshtastic/*.proto
+- **Transport**: TCP to Meshtastic node (System.Net.Sockets)
+- **Deployment**: `%appdata%\wintak\plugins\{PluginName}\`
+
+## Key WinTAK SDK Namespaces
+- `WinTak.Framework` — Plugin attributes (TakSdkVersion, PluginName, PluginDescription, PluginIcon)
+- `WinTak.Framework.Docking` — DockPane, IDockingManager, DockPaneStartupMode
+- `WinTak.Framework.Tools` — Button base class for ribbon bar buttons
+- `Microsoft.Practices.Prism.MefExtensions.Modularity` — ModuleExport attribute
+- `Microsoft.Practices.Prism.Modularity` — IModule interface
+- `Microsoft.Practices.Prism.PubSubEvents` — IEventAggregator for pub/sub messaging
+- `Microsoft.Practices.Prism.Commands` — DelegateCommand for MVVM
 
 ## Commands
-- `dotnet build src/` : Build the plugin
+- `dotnet build src/` : Build the plugin (auto-deploys to %appdata%\wintak\plugins\)
 - `dotnet test tests/` : Run all tests
 - `dotnet test tests/ --filter "FullyQualifiedName~HandlerName"` : Run single test class
-- `protoc --csharp_out=proto/generated proto/meshtastic/*.proto` : Regenerate protobuf classes
+- `protoc --csharp_out=proto/generated proto/meshtastic/meshtastic/*.proto` : Regenerate protobuf classes
 
 ## Architecture
-- `src/Plugin/` : Entry point. Implements WinTAK IPlugin. Lifecycle: OnLoad, OnStart, OnStop.
-- `src/Connection/` : MeshtasticTcpClient. Async read loop on background thread. Auto-reconnect (default 15s, configurable 5–60s).
-- `src/Handlers/` : One class per portnum implementing IPacketHandler. See Portnum Handler Pattern below.
-- `src/CoT/` : CoT XML builder utilities. IMPORTANT: All CoT must validate against TAK 5.x schema.
-- `src/Models/` : NodeState keyed by (connectionId, meshNodeId) for future multi-node support. ChannelState, TelemetryData, NeighborInfo.
-- `src/UI/` : WPF UserControls for settings panel, chat panel, node detail view, topology toggle.
+- `src/Plugin/MeshtasticModule.cs` : MEF entry point. Implements IModule with [ModuleExport]. Initialize() called at startup.
+- `src/Plugin/HandlerRegistry.cs` : Maps portnums to IPacketHandler implementations.
+- `src/Connection/MeshtasticTcpClient.cs` : Async TCP client with 4-byte header protocol, auto-reconnect.
+- `src/Handlers/` : One class per portnum implementing IPacketHandler.
+- `src/CoT/CotBuilder.cs` : CoT XML builder. IMPORTANT: All CoT must validate against TAK 5.x schema.
+- `src/Models/` : NodeState keyed by (connectionId, meshNodeId), ChannelState, TelemetryData, NeighborInfo.
+- `src/UI/MeshtasticDockPane.cs` : ViewModel for dockable panel, inherits DockPane.
+- `src/UI/MeshtasticButton.cs` : Ribbon bar button, inherits Button, uses IDockingManager.
+- `src/UI/MeshtasticView.xaml` : WPF UserControl for dock pane content.
+- `src/UI/Converters.cs` : XAML value converters.
 - `src/Topology/` : Neighbor graph, SNR tracking, overlay line generation.
+- `src/Assets/` : Icons (Build Action = Resource for button images).
 - `proto/generated/` : NEVER hand-edit. Regenerate with protoc command above.
 - `tests/` : Mirrors src/ structure. Every handler needs unit tests.
+
+## MEF Plugin Pattern
+```csharp
+// Module entry point
+[ModuleExport(typeof(MeshtasticModule), InitializationMode = InitializationMode.WhenAvailable)]
+public class MeshtasticModule : IModule
+{
+    [ImportingConstructor]
+    public MeshtasticModule(IEventAggregator eventAggregator) { ... }
+    public void Initialize() { ... }
+}
+
+// Dockable panel
+[DockPane("UniqueId", typeof(ViewType), Caption = "Name")]
+[Export]
+public class MyDockPane : DockPane { ... }
+
+// Ribbon button
+[Button(typeof(MyButton), "Display Name", LargeImagePath = "/Assembly;component/path.png")]
+[Export]
+public class MyButton : Button
+{
+    [ImportingConstructor]
+    public MyButton(IDockingManager dockingManager) { ... }
+    protected override void OnClick() { _dockingManager.ActivateDockPane("Id"); }
+}
+```
+
+## AssemblyInfo Plugin Attributes
+Required in `Properties/AssemblyInfo.cs`:
+```csharp
+[assembly: TakSdkVersion("5.0")]
+[assembly: PluginName("Meshtastic")]
+[assembly: PluginDescription("...")]
+[assembly: PluginIcon("/WinTakMeshtasticPlugin;component/Assets/icon.png")]
+```
 
 ## CoT Schema Rules
 - Default CoT type for mesh nodes: `a-f-G-U-C` (friendly ground civilian)
@@ -73,6 +127,9 @@ When adding a new portnum handler, follow this pattern exactly:
 - Run `dotnet test tests/` before every commit (enforced by pre-commit hook)
 
 ## Gotchas
+- WinTAK is x64 only — build must target x64 platform
+- NuGet packages from `C:\Program Files\WinTAK\NuGet` — add nuget.config with this source
+- Button images must have Build Action = Resource in project
 - Protobuf unknown fields: preserve them, don't fail. Log unknown portnums at Debug level.
 - Channel index 0 is always the default outbound channel
 - NodeState must be keyed `(connectionId, nodeId)` not just `nodeId` — future multi-node support
