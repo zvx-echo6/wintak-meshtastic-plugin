@@ -25,6 +25,9 @@ Full requirements: docs/wintak-meshtastic-plugin-requirements.docx and docs/wint
 - `WinTak.Common.CoT` — CoTMessageArgument, CotEvent
 - `WinTak.Net.Chat` — IChatService, IChatRoom, Message (chat rooms)
 - `WinTak.Net.Contacts` — IContactService (contacts auto-created from CoT)
+- `Spyglass.Graphics` — Polyline, MapMarker, MapObject (graphics rendering)
+- `WinTak.CursorOnTarget.Graphics` — PairingLine, CotMapMarker
+- `WinTak.Overlays.ViewModels` — MapObjectItemManager (overlay management)
 - `Microsoft.Practices.Prism.MefExtensions.Modularity` — ModuleExport attribute
 - `Microsoft.Practices.Prism.Modularity` — IModule interface
 - `Microsoft.Practices.Prism.PubSubEvents` — IEventAggregator for pub/sub messaging
@@ -122,6 +125,42 @@ public class Settings {
 }
 ```
 
+## Map Drawing / Topology Overlay API (Confirmed Phase 0)
+
+Draw topology lines between mesh nodes using CoT shapes:
+```csharp
+// CoT type u-d-f = user-defined freeform (polyline)
+string cotXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<event version=""2.0"" uid=""MESH-LINK-{nodeA:X8}-{nodeB:X8}""
+       type=""u-d-f"" time=""..."" start=""..."" stale=""..."" how=""m-g"">
+    <point lat=""{centerLat}"" lon=""{centerLon}"" hae=""0"" ce=""9999999"" le=""9999999""/>
+    <detail>
+        <link point=""{lat1},{lon1}""/>
+        <link point=""{lat2},{lon2}""/>
+        <strokeColor value=""-16711681""/>  <!-- Cyan -->
+        <strokeWeight value=""2.0""/>
+        <fillColor value=""0""/>
+        <contact callsign=""Mesh Link""/>
+    </detail>
+</event>";
+_cotMessageSender.Send(xmlDoc);
+```
+
+**CoT Shape Types:**
+- `u-d-f` — User-defined freeform polyline/polygon
+- `u-d-r` — User-defined rectangle
+- `u-rb-a` — Range and bearing line
+
+**Color Values (ARGB signed int):**
+- Green: `-16711936`, Yellow: `-256`, Orange: `-32768`, Red: `-65536`, Cyan: `-16711681`
+
+**SNR-based line coloring:**
+- Green (> -5 dB), Yellow (-5 to -10 dB), Orange (-10 to -15 dB), Red (< -15 dB)
+
+**Link UID format:** `MESH-LINK-{nodeA:X8}-{nodeB:X8}` (sorted node IDs for consistency)
+
+**Remove link:** Send CoT with stale time in the past.
+
 ## Commands
 - `dotnet build src/` : Build the plugin (auto-deploys to %appdata%\wintak\plugins\)
 - `dotnet test tests/` : Run all tests
@@ -139,7 +178,7 @@ public class Settings {
 - `src/UI/MeshtasticButton.cs` : Ribbon bar button, inherits Button, uses IDockingManager.
 - `src/UI/MeshtasticView.xaml` : WPF UserControl for dock pane content.
 - `src/UI/Converters.cs` : XAML value converters.
-- `src/Topology/` : Neighbor graph, SNR tracking, overlay line generation.
+- `src/Topology/` : Neighbor graph, SNR tracking, overlay line generation via CoT shapes (u-d-f type).
 - `src/Assets/` : Icons (Build Action = Resource for button images).
 - `proto/generated/` : NEVER hand-edit. Regenerate with protoc command above.
 - `tests/` : Mirrors src/ structure. Every handler needs unit tests.
