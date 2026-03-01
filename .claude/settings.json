@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "postEditFile": [
+      {
+        "command": "dotnet format src/ --include ${file}",
+        "description": "Auto-format edited C# files"
+      }
+    ],
+    "preCommit": [
+      {
+        "command": "dotnet build src/ -warnaserror",
+        "description": "Build with warnings as errors before commit"
+      },
+      {
+        "command": "dotnet test tests/",
+        "description": "Run all tests before commit"
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "dotnet *",
+      "protoc *",
+      "git *",
+      "mkdir *",
+      "cp *",
+      "rm proto/generated.bak/*"
+    ]
+  }
+}
