@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.Composition;
+using System.Threading;
 using System.Xml;
 using Microsoft.Practices.Prism.MefExtensions.Modularity;
 using Microsoft.Practices.Prism.Modularity;
@@ -29,7 +30,20 @@ namespace WinTakMeshtasticPlugin.Plugin
 
         private readonly IHandlerRegistry _handlerRegistry;
         private readonly ICotBuilder _cotBuilder;
+        private readonly NodeStateManager _nodeStateManager;
         private MeshtasticTcpClient _client;
+        private CancellationTokenSource _cts;
+
+        // Default connection settings (will be configurable via settings panel later)
+        private string _hostname = "localhost";
+        private int _port = 4403;
+        private int _reconnectIntervalSeconds = 15;
+        private bool _autoConnect = false;
+
+        /// <summary>
+        /// Current connection state for UI binding.
+        /// </summary>
+        public ConnectionState ConnectionState => _client?.State ?? ConnectionState.Disconnected;
 
         /// <summary>
         /// MEF constructor with dependency injection.
@@ -51,6 +65,7 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             _handlerRegistry = new HandlerRegistry();
             _cotBuilder = new CotBuilder();
+            _nodeStateManager = new NodeStateManager();
         }
 
         /// <summary>
@@ -63,6 +78,8 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             try
             {
+                _cts = new CancellationTokenSource();
+
                 // Register packet handlers for each supported portnum
                 _handlerRegistry.RegisterDefaultHandlers();
 
@@ -72,8 +89,19 @@ namespace WinTakMeshtasticPlugin.Plugin
                 // Subscribe to operator position changes for outbound PLI
                 _locationService.PositionChanged += OnOperatorPositionChanged;
 
-                // Test CoT injection with a synthetic marker
-                InjectTestMarker();
+                // Subscribe to node state changes for logging
+                _nodeStateManager.NodeStateChanged += OnNodeStateChanged;
+                _nodeStateManager.NodeRemoved += OnNodeRemoved;
+
+                // TODO: Load settings from JSON file
+                // LoadSettings();
+
+                // Auto-connect if enabled in settings
+                if (_autoConnect && !string.IsNullOrEmpty(_hostname))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Meshtastic] Auto-connecting to {_hostname}:{_port}");
+                    ConnectAsync(_hostname, _port);
+                }
 
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initialized successfully");
             }
@@ -84,47 +112,15 @@ namespace WinTakMeshtasticPlugin.Plugin
             }
         }
 
-        /// <summary>
-        /// Inject a test marker to verify CoT API integration.
-        /// Creates a marker at lat 42.75, lon -114.46 with callsign "MESH-TEST".
-        /// </summary>
-        private void InjectTestMarker()
+        private void OnNodeStateChanged(object sender, NodeStateChangedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("[Meshtastic] Injecting test CoT marker...");
+            System.Diagnostics.Debug.WriteLine(
+                $"[Meshtastic] Node state updated: {e.Node.DisplayName} @ {e.Node.Latitude?.ToString("F6") ?? "?"}, {e.Node.Longitude?.ToString("F6") ?? "?"}");
+        }
 
-            try
-            {
-                // Create a test node state
-                var testNode = new NodeState
-                {
-                    ConnectionId = "TEST",
-                    NodeId = 0xDEADBEEF,
-                    ShortName = "MESH-TEST",
-                    LongName = "Meshtastic Test Node",
-                    Latitude = 42.75,
-                    Longitude = -114.46,
-                    Altitude = 1200,
-                    Role = DeviceRole.Client,
-                    LastHeard = DateTime.UtcNow,
-                    LastPositionUpdate = DateTime.UtcNow
-                };
-                testNode.ChannelsMembership.Add(0); // Channel 0 = Cyan
-
-                // Build CoT XML using our builder
-                string cotXml = _cotBuilder.BuildNodePli(testNode);
-                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Generated CoT XML:\n{cotXml}");
-
-                // Inject into WinTAK via ICotMessageSender
-                var xmlDoc = new XmlDocument();
-                xmlDoc.LoadXml(cotXml);
-                _cotMessageSender.Send(xmlDoc);
-
-                System.Diagnostics.Debug.WriteLine("[Meshtastic] Test marker injected successfully");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Test marker injection failed: {ex.Message}");
-            }
+        private void OnNodeRemoved(object sender, NodeStateRemovedEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Meshtastic] Node removed: {e.Node.DisplayName}");
         }
 
         /// <summary>
@@ -229,25 +225,63 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// Connect to a Meshtastic node.
         /// Called from UI or on plugin startup if auto-connect is enabled.
         /// </summary>
-        public async void ConnectAsync(string hostname, int port = 4403)
+        /// <param name="hostname">Hostname or IP address of the Meshtastic node.</param>
+        /// <param name="port">TCP port (default 4403, must be configurable per requirements).</param>
+        public async void ConnectAsync(string hostname, int port)
         {
+            if (string.IsNullOrWhiteSpace(hostname))
+            {
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Cannot connect: hostname is required");
+                return;
+            }
+
+            // Disconnect existing connection if any
             if (_client != null)
             {
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting existing connection...");
                 await _client.DisconnectAsync();
+                _client.PacketReceived -= OnPacketReceived;
+                _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
+                _client = null;
             }
+
+            // Store current settings
+            _hostname = hostname;
+            _port = port;
 
             var config = new MeshtasticClientConfig
             {
                 Hostname = hostname,
-                Port = port
+                Port = port,
+                ReconnectIntervalSeconds = _reconnectIntervalSeconds
             };
+
+            System.Diagnostics.Debug.WriteLine($"[Meshtastic] Connecting to {hostname}:{port}...");
 
             _client = new MeshtasticTcpClient(config);
             _client.PacketReceived += OnPacketReceived;
             _client.StateChanged += OnConnectionStateChanged;
 
-            await _client.ConnectAsync();
+            try
+            {
+                await _client.ConnectAsync(_cts.Token);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Connection failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update connection settings.
+        /// </summary>
+        public void UpdateSettings(string hostname, int port, int reconnectIntervalSeconds, bool autoConnect)
+        {
+            _hostname = hostname;
+            _port = port;
+            _reconnectIntervalSeconds = Math.Clamp(reconnectIntervalSeconds, 5, 60);
+            _autoConnect = autoConnect;
         }
 
         /// <summary>
@@ -257,13 +291,55 @@ namespace WinTakMeshtasticPlugin.Plugin
         {
             if (_client != null)
             {
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting...");
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnected");
             }
         }
+
+        /// <summary>
+        /// Clean up resources when plugin is unloaded.
+        /// </summary>
+        public void Shutdown()
+        {
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin shutting down...");
+
+            _cts?.Cancel();
+
+            if (_client != null)
+            {
+                _client.PacketReceived -= OnPacketReceived;
+                _client.StateChanged -= OnConnectionStateChanged;
+                _client.Dispose();
+                _client = null;
+            }
+
+            _cotMessageReceiver.MessageReceived -= OnCotMessageReceived;
+            _locationService.PositionChanged -= OnOperatorPositionChanged;
+            _nodeStateManager.NodeStateChanged -= OnNodeStateChanged;
+            _nodeStateManager.NodeRemoved -= OnNodeRemoved;
+
+            _cts?.Dispose();
+
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin shutdown complete");
+        }
+
+        /// <summary>
+        /// Get all tracked mesh nodes.
+        /// </summary>
+        public System.Collections.Generic.IEnumerable<NodeState> GetNodes()
+        {
+            return _nodeStateManager.GetAll();
+        }
+
+        /// <summary>
+        /// Get the count of tracked nodes.
+        /// </summary>
+        public int NodeCount => _nodeStateManager.Count;
 
         private async void OnPacketReceived(object sender, MeshPacketReceivedEventArgs e)
         {
@@ -286,6 +362,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             var context = new PacketHandlerContext
             {
                 ConnectionId = e.ConnectionId,
+                NodeStateManager = _nodeStateManager,
                 CotBuilder = _cotBuilder
             };
 
