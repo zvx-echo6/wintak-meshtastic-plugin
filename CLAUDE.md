@@ -23,6 +23,8 @@ Full requirements: docs/wintak-meshtastic-plugin-requirements.docx and docs/wint
 - `WinTak.CursorOnTarget.Services` — ICotMessageSender, ICotMessageReceiver (CoT injection)
 - `WinTak.Common.Services` — ICommunicationService, ILocationService
 - `WinTak.Common.CoT` — CoTMessageArgument, CotEvent
+- `WinTak.Net.Chat` — IChatService, IChatRoom, Message (chat rooms)
+- `WinTak.Net.Contacts` — IContactService (contacts auto-created from CoT)
 - `Microsoft.Practices.Prism.MefExtensions.Modularity` — ModuleExport attribute
 - `Microsoft.Practices.Prism.Modularity` — IModule interface
 - `Microsoft.Practices.Prism.PubSubEvents` — IEventAggregator for pub/sub messaging
@@ -67,6 +69,57 @@ Team colors in CoT XML (set via `__group` element):
     <contact callsign="NODE-NAME"/>
     <__group name="Cyan" role="Team Member"/>
 </detail>
+```
+
+## Chat & Contact API (Confirmed Phase 0)
+
+**Contacts are AUTOMATIC from CoT** — injecting CoT with callsign creates contacts:
+```csharp
+// When you inject CoT with a callsign, WinTAK automatically:
+// 1. Creates marker on map
+// 2. Adds entity to contacts list
+// 3. Sets team color from __group element
+```
+
+Chat rooms (IChatService) — use for channel-based chat:
+```csharp
+[ImportingConstructor]
+public MyClass(IChatService chatService) {
+    _chatService = chatService;
+    _chatService.MessageReceived += OnMessageReceived;
+    _chatService.MessageSent += OnMessageSent; // Intercept outbound
+
+    // Create room for each Meshtastic channel
+    var room = _chatService.CreateChatRoom();
+    _chatService.AddRoom(room);
+
+    // Send message to room
+    _chatService.SendMessageToRoom(message, room);
+}
+```
+
+**Alternative**: Use GeoChat CoT type (b-t-f) for chat messages — proven to work.
+
+Multiple dock panes — each needs unique ID:
+```csharp
+[DockPane("MeshtasticMainPane", typeof(MainView), Caption = "Meshtastic")]
+public class MainDockPane : DockPane { }
+
+[DockPane("MeshtasticChatPane", typeof(ChatView), Caption = "Mesh Chat")]
+public class ChatDockPane : DockPane { }
+
+// Open any pane
+_dockingManager.ActivateDockPane("MeshtasticChatPane");
+```
+
+Plugin settings — NO native API, self-managed:
+```csharp
+// Store in: %appdata%\wintak\plugins\WinTakMeshtasticPlugin\settings.json
+public class Settings {
+    public static string Path => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "wintak", "plugins", "WinTakMeshtasticPlugin", "settings.json");
+}
 ```
 
 ## Commands
