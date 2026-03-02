@@ -1,11 +1,14 @@
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
+using System.Linq;
 using System.Windows.Input;
 using Prism.Commands;
 using WinTak.Framework.Docking;
 using WinTak.Framework.Docking.Attributes;
 using WinTakMeshtasticPlugin.Plugin;
 using WinTakMeshtasticPlugin.Connection;
+using WinTakMeshtasticPlugin.Models;
 
 namespace WinTakMeshtasticPlugin.UI
 {
@@ -24,6 +27,17 @@ namespace WinTakMeshtasticPlugin.UI
         private int _port = 4403;
         private int _nodeCount = 0;
         private bool _isConnected = false;
+        private ObservableCollection<NodeState> _nodes = new ObservableCollection<NodeState>();
+        private System.Windows.Threading.DispatcherTimer? _refreshTimer;
+
+        /// <summary>
+        /// Observable collection of mesh nodes for UI binding.
+        /// </summary>
+        public ObservableCollection<NodeState> Nodes
+        {
+            get => _nodes;
+            set => SetProperty(ref _nodes, value);
+        }
 
         /// <summary>
         /// Gets the MeshtasticModule instance.
@@ -64,12 +78,65 @@ namespace WinTakMeshtasticPlugin.UI
             System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
             {
                 UpdateConnectionState(e.NewState);
-                var module = Module;
-                if (module != null)
+                RefreshNodes();
+
+                // Start/stop refresh timer based on connection state
+                if (e.NewState == ConnectionState.Connected)
                 {
-                    NodeCount = module.NodeCount;
+                    StartRefreshTimer();
+                }
+                else if (e.NewState == ConnectionState.Disconnected)
+                {
+                    StopRefreshTimer();
                 }
             });
+        }
+
+        private void StartRefreshTimer()
+        {
+            if (_refreshTimer != null) return;
+
+            _refreshTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            _refreshTimer.Tick += (s, e) => RefreshNodes();
+            _refreshTimer.Start();
+
+            // Do an immediate refresh after a short delay to catch config dump
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    System.Threading.Thread.Sleep(2000);
+                    RefreshNodes();
+                }));
+        }
+
+        private void StopRefreshTimer()
+        {
+            _refreshTimer?.Stop();
+            _refreshTimer = null;
+        }
+
+        /// <summary>
+        /// Refresh the nodes collection from the module.
+        /// </summary>
+        public void RefreshNodes()
+        {
+            var module = Module;
+            if (module == null) return;
+
+            NodeCount = module.NodeCount;
+
+            // Update the observable collection
+            var currentNodes = module.GetNodes().OrderByDescending(n => n.LastHeard).ToList();
+
+            Nodes.Clear();
+            foreach (var node in currentNodes)
+            {
+                Nodes.Add(node);
+            }
         }
 
         #region Properties

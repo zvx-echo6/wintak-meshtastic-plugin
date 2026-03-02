@@ -6,16 +6,114 @@
              xmlns:local="clr-namespace:WinTakMeshtasticPlugin.UI"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="300"
-             Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+             Background="#2D2D30"
+             Foreground="#F1F1F1">
 
     <UserControl.Resources>
         <!-- Converters -->
         <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
 
+        <!-- Dark theme colors -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="ForegroundBrush" Color="#F1F1F1"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
+        <SolidColorBrush x:Key="TextBoxBackgroundBrush" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#A0A0A0"/>
+
         <!-- Status indicator colors -->
         <SolidColorBrush x:Key="ConnectedBrush" Color="#22AA22"/>
         <SolidColorBrush x:Key="DisconnectedBrush" Color="#AA2222"/>
         <SolidColorBrush x:Key="ConnectingBrush" Color="#AAAA22"/>
+
+        <!-- TextBox Style -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+
+        <!-- Button Style -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="2"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#505050"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#606060"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#2D2D30"/>
+                                <Setter Property="Foreground" Value="#606060"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- GroupBox Style -->
+        <Style TargetType="GroupBox">
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,1,1,0"
+                                    Background="{StaticResource TextBoxBackgroundBrush}" CornerRadius="2,2,0,0">
+                                <ContentPresenter ContentSource="Header" Margin="8,4"/>
+                            </Border>
+                            <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    Background="{StaticResource BackgroundBrush}" CornerRadius="0,0,2,2">
+                                <ContentPresenter Margin="8"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ListBox Style -->
+        <Style TargetType="ListBox">
+            <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        </Style>
+
+        <!-- ListBoxItem Style -->
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3399FF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#404040"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="8">
@@ -61,7 +159,8 @@
         </GroupBox>
 
         <!-- Status Bar -->
-        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="8,4" Margin="0,0,0,8">
+        <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="8,4" Margin="0,0,0,8"
+                Background="{StaticResource TextBoxBackgroundBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -101,21 +200,24 @@
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal" Margin="4">
                             <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding LastHeard, StringFormat='Last: {0:HH:mm:ss}'}" Foreground="Gray"/>
+                            <TextBlock Text="{Binding LastHeard, StringFormat='Last: {0:HH:mm:ss}'}" Foreground="{StaticResource SecondaryTextBrush}"/>
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
                 <!-- Empty state placeholder -->
                 <ListBox.Style>
-                    <Style TargetType="ListBox">
+                    <Style TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding NodeCount}" Value="0">
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate>
-                                            <TextBlock Text="No mesh nodes detected yet.&#x0a;&#x0a;Connect to a Meshtastic node to see nearby mesh devices."
-                                                       TextWrapping="Wrap" Foreground="Gray" Margin="16"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <Border Background="{StaticResource TextBoxBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                                <TextBlock Text="No mesh nodes detected yet.&#x0a;&#x0a;Connect to a Meshtastic node to see nearby mesh devices."
+                                                           TextWrapping="Wrap" Foreground="{StaticResource SecondaryTextBrush}" Margin="16"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>

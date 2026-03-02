@@ -6,9 +6,20 @@ All notable changes to the WinTAK Meshtastic Plugin.
 
 ### Added
 - Packet reception logging to debug data flow
+- `NodeInfoReceived` event for config dump processing
+- Observable `Nodes` collection for UI binding
+- 5-second auto-refresh timer for node list
 
 ### Fixed
-- (Pending) Verify packet reception from mesh network
+- **want_config Request**: Send config request after TCP connect to trigger node info dump
+- **NodeInfo Processing**: Extract shortnames/longnames from FromRadio.NodeInfo during config dump
+- **Dark Theme Compatibility**: Full dark theme styling for all UI elements:
+  - Background: #2D2D30, Foreground: #F1F1F1
+  - TextBox, Button, GroupBox, ListBox styles
+  - Status bar with proper dark background
+  - Secondary text color (#A0A0A0) for timestamps
+- **Node List Display**: Panel now shows node count and lists nodes with shortnames
+- **Assembly Binding**: Use WinTAK's Google.Protobuf.dll to avoid version conflicts
 
 ---
 
