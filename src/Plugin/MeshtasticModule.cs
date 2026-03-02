@@ -3,12 +3,12 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Xml;
-using Microsoft.Practices.Prism.MefExtensions.Modularity;
-using Microsoft.Practices.Prism.Modularity;
-using Microsoft.Practices.Prism.PubSubEvents;
+using Prism.Events;
+using WinTakMeshtasticPlugin.Helpers;
 using WinTak.Common.CoT;
 using WinTak.Common.Services;
 using WinTak.CursorOnTarget.Services;
+using WinTak.Framework;
 using WinTakMeshtasticPlugin.Connection;
 using WinTakMeshtasticPlugin.CoT;
 using WinTakMeshtasticPlugin.Handlers;
@@ -21,9 +21,18 @@ namespace WinTakMeshtasticPlugin.Plugin
     /// Main entry point for the Meshtastic WinTAK plugin.
     /// Uses MEF (Managed Extensibility Framework) for plugin composition.
     /// </summary>
-    [ModuleExport(typeof(MeshtasticModule), InitializationMode = InitializationMode.WhenAvailable)]
-    public class MeshtasticModule : IModule
+    [Export(typeof(ITakModule))]
+    public class MeshtasticModule : ITakModule
     {
+        /// <summary>
+        /// Static instance for access from UI components.
+        /// </summary>
+        public static MeshtasticModule Instance { get; private set; }
+
+        /// <summary>
+        /// Event raised when connection state changes.
+        /// </summary>
+        public event EventHandler<ConnectionStateChangedEventArgs> ConnectionStateChanged;
         private readonly IEventAggregator _eventAggregator;
         private readonly ICotMessageSender _cotMessageSender;
         private readonly ICotMessageReceiver _cotMessageReceiver;
@@ -100,12 +109,21 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
-        /// Called by WinTAK during application startup.
-        /// Initialize plugin services, register handlers, load settings.
+        /// Called by WinTAK during module initialization phase.
         /// </summary>
         public void Initialize()
         {
             System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initializing...");
+            Instance = this;
+        }
+
+        /// <summary>
+        /// Called by WinTAK after all modules are initialized.
+        /// Start background services and establish connections.
+        /// </summary>
+        public void Startup()
+        {
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin starting up...");
 
             try
             {
@@ -382,7 +400,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         {
             _settings.Hostname = hostname;
             _settings.Port = port;
-            _settings.ReconnectIntervalSeconds = Math.Clamp(reconnectIntervalSeconds, 5, 60);
+            _settings.ReconnectIntervalSeconds = MathExtensions.Clamp(reconnectIntervalSeconds, 5, 60);
             _settings.AutoConnect = autoConnect;
         }
 
@@ -413,10 +431,11 @@ namespace WinTakMeshtasticPlugin.Plugin
 
         /// <summary>
         /// Clean up resources when plugin is unloaded.
+        /// Called by WinTAK when the application is shutting down.
         /// </summary>
-        public void Shutdown()
+        public void Terminate()
         {
-            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin shutting down...");
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin terminating...");
 
             // Save settings before shutdown
             try
@@ -460,6 +479,7 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             _cts?.Dispose();
 
+            Instance = null;
             System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin shutdown complete");
         }
 
@@ -535,8 +555,8 @@ namespace WinTakMeshtasticPlugin.Plugin
         {
             System.Diagnostics.Debug.WriteLine($"[Meshtastic] Connection state: {e.OldState} -> {e.NewState}");
 
-            // TODO: Publish connection state change event via IEventAggregator
-            // _eventAggregator.GetEvent<MeshtasticConnectionStateEvent>().Publish(e.NewState);
+            // Forward to subscribers (UI)
+            ConnectionStateChanged?.Invoke(this, e);
         }
     }
 }

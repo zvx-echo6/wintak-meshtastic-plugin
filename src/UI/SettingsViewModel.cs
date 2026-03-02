@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using WinTakMeshtasticPlugin.Connection;
+using WinTakMeshtasticPlugin.Helpers;
 using WinTakMeshtasticPlugin.Models;
 
 namespace WinTakMeshtasticPlugin.UI
@@ -75,7 +76,7 @@ namespace WinTakMeshtasticPlugin.UI
             {
                 if (_settings.Port != value)
                 {
-                    _settings.Port = Math.Clamp(value, 1, 65535);
+                    _settings.Port = MathExtensions.Clamp(value, 1, 65535);
                     OnPropertyChanged();
                 }
             }
@@ -101,7 +102,7 @@ namespace WinTakMeshtasticPlugin.UI
             {
                 if (_settings.ReconnectIntervalSeconds != value)
                 {
-                    _settings.ReconnectIntervalSeconds = Math.Clamp(value, 5, 60);
+                    _settings.ReconnectIntervalSeconds = MathExtensions.Clamp(value, 5, 60);
                     OnPropertyChanged();
                 }
             }
@@ -197,7 +198,7 @@ namespace WinTakMeshtasticPlugin.UI
             {
                 if (_settings.StaleNodeTimeoutHours != value)
                 {
-                    _settings.StaleNodeTimeoutHours = Math.Clamp(value, 1, 168);
+                    _settings.StaleNodeTimeoutHours = MathExtensions.Clamp(value, 1, 168);
                     OnPropertyChanged();
                 }
             }
@@ -237,7 +238,7 @@ namespace WinTakMeshtasticPlugin.UI
             {
                 if (_settings.OutboundPliIntervalSeconds != value)
                 {
-                    _settings.OutboundPliIntervalSeconds = Math.Clamp(value, 10, 600);
+                    _settings.OutboundPliIntervalSeconds = MathExtensions.Clamp(value, 10, 600);
                     OnPropertyChanged();
                 }
             }

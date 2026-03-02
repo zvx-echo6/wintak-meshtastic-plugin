@@ -28,7 +28,7 @@ using WinTak.Framework;
 
 // WinTAK Plugin Attributes
 // These are required for WinTAK to recognize and load the plugin
-[assembly: TakSdkVersion("5.0")]
+[assembly: TakSdkVersion("5.4")]
 [assembly: PluginName("Meshtastic")]
 [assembly: PluginDescription("Native Meshtastic mesh network integration for WinTAK. Provides bidirectional communication with Meshtastic nodes, PLI tracking, channel-aware chat, and telemetry display.")]
 [assembly: PluginIcon("/WinTakMeshtasticPlugin;component/Assets/meshtastic_icon.png")]

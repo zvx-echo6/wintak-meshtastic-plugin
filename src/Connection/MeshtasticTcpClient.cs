@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Google.Protobuf;
 using Meshtastic.Protobufs;
 using Microsoft.Extensions.Logging;
+using WinTakMeshtasticPlugin.Helpers;
 
 namespace WinTakMeshtasticPlugin.Connection
 {
@@ -31,7 +32,7 @@ namespace WinTakMeshtasticPlugin.Connection
         /// Unique identifier for this connection.
         /// Used to key node state for multi-node support.
         /// </summary>
-        public string ConnectionId { get; } = Guid.NewGuid().ToString("N")[..8];
+        public string ConnectionId { get; } = Guid.NewGuid().ToString("N").Substring(0, 8);
 
         /// <summary>
         /// Current connection state.
@@ -363,7 +364,7 @@ namespace WinTakMeshtasticPlugin.Connection
         public int ReconnectIntervalSeconds
         {
             get => _reconnectIntervalSeconds;
-            set => _reconnectIntervalSeconds = Math.Clamp(value, 5, 60);
+            set => _reconnectIntervalSeconds = MathExtensions.Clamp(value, 5, 60);
         }
         private int _reconnectIntervalSeconds = 15;
     }

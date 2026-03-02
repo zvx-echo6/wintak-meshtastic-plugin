@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using WinTakMeshtasticPlugin.Helpers;
 
 namespace WinTakMeshtasticPlugin.Models
 {
@@ -80,7 +80,7 @@ namespace WinTakMeshtasticPlugin.Models
                 if (File.Exists(SettingsPath))
                 {
                     var json = File.ReadAllText(SettingsPath);
-                    var settings = JsonSerializer.Deserialize<PluginSettings>(json, JsonOptions);
+                    var settings = JsonConvert.DeserializeObject<PluginSettings>(json, JsonSettings);
                     if (settings != null)
                     {
                         System.Diagnostics.Debug.WriteLine("[Settings] Loaded settings from disk");
@@ -110,7 +110,7 @@ namespace WinTakMeshtasticPlugin.Models
                     Directory.CreateDirectory(directory);
                 }
 
-                var json = JsonSerializer.Serialize(this, JsonOptions);
+                var json = JsonConvert.SerializeObject(this, JsonSettings);
                 File.WriteAllText(SettingsPath, json);
 
                 System.Diagnostics.Debug.WriteLine("[Settings] Saved settings to disk");
@@ -126,18 +126,17 @@ namespace WinTakMeshtasticPlugin.Models
         /// </summary>
         public void Validate()
         {
-            Port = Math.Clamp(Port, 1, 65535);
-            ReconnectIntervalSeconds = Math.Clamp(ReconnectIntervalSeconds, 5, 60);
-            SelectedOutboundChannel = Math.Clamp(SelectedOutboundChannel, 0, 7);
-            OutboundPliIntervalSeconds = Math.Clamp(OutboundPliIntervalSeconds, 10, 600);
-            StaleNodeTimeoutHours = Math.Clamp(StaleNodeTimeoutHours, 1, 168);
+            Port = MathExtensions.Clamp(Port, 1, 65535);
+            ReconnectIntervalSeconds = MathExtensions.Clamp(ReconnectIntervalSeconds, 5, 60);
+            SelectedOutboundChannel = MathExtensions.Clamp(SelectedOutboundChannel, 0, 7);
+            OutboundPliIntervalSeconds = MathExtensions.Clamp(OutboundPliIntervalSeconds, 10, 600);
+            StaleNodeTimeoutHours = MathExtensions.Clamp(StaleNodeTimeoutHours, 1, 168);
         }
 
-        private static readonly JsonSerializerOptions JsonOptions = new()
+        private static readonly JsonSerializerSettings JsonSettings = new()
         {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            Formatting = Formatting.Indented,
+            NullValueHandling = NullValueHandling.Ignore
         };
     }
 }

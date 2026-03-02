@@ -1,6 +1,7 @@
 using System.ComponentModel.Composition;
 using WinTak.Framework.Docking;
 using WinTak.Framework.Tools;
+using WinTak.Framework.Tools.Attributes;
 
 namespace WinTakMeshtasticPlugin.UI
 {
@@ -9,10 +10,11 @@ namespace WinTakMeshtasticPlugin.UI
     /// Appears in WinTAK's ribbon bar with the Meshtastic icon.
     /// </summary>
     [Button(
-        typeof(MeshtasticButton),
+        "MeshtasticButton",
         "Meshtastic",
-        LargeImagePath = "/WinTakMeshtasticPlugin;component/Assets/meshtastic_icon.png",
-        SmallImagePath = "/WinTakMeshtasticPlugin;component/Assets/meshtastic_icon_24.png")]
+        LargeImage = "meshtastic_icon.png",
+        SmallImage = "meshtastic_icon_24.png",
+        ResourceFileType = typeof(MeshtasticButton))]
     [Export]
     public class MeshtasticButton : Button
     {
@@ -34,8 +36,9 @@ namespace WinTakMeshtasticPlugin.UI
         /// </summary>
         protected override void OnClick()
         {
-            // Activate the dock pane (shows it if hidden, focuses it if visible)
-            _dockingManager.ActivateDockPane(MeshtasticDockPane.Id);
+            // Get the dock pane and activate it (shows it if hidden, focuses it if visible)
+            var dockPane = _dockingManager.GetDockPane(MeshtasticDockPane.Id);
+            dockPane?.Activate();
         }
     }
 }

@@ -1,8 +1,11 @@
 using System;
 using System.ComponentModel.Composition;
 using System.Windows.Input;
-using Microsoft.Practices.Prism.Commands;
+using Prism.Commands;
 using WinTak.Framework.Docking;
+using WinTak.Framework.Docking.Attributes;
+using WinTakMeshtasticPlugin.Plugin;
+using WinTakMeshtasticPlugin.Connection;
 
 namespace WinTakMeshtasticPlugin.UI
 {
@@ -10,27 +13,63 @@ namespace WinTakMeshtasticPlugin.UI
     /// ViewModel for the Meshtastic dockable panel.
     /// Provides connection status, node list, chat, and settings UI.
     /// </summary>
-    [DockPane(
-        Id,
-        typeof(MeshtasticView),
-        Caption = "Meshtastic",
-        StartupMode = DockPaneStartupMode.Unpinned,
-        StartupState = DockPaneState.DockedLeft)]
+    [DockPane(Id, "Meshtastic", Content = typeof(MeshtasticView))]
     [Export]
     public class MeshtasticDockPane : DockPane
     {
-        public const string Id = "WinTakMeshtasticPlugin.MeshtasticDockPane";
+        public const string Id = "MeshtasticDockPane";
 
         private string _connectionStatus = "Disconnected";
-        private string _hostname = "192.168.1.1";
+        private string _hostname = "192.168.1.117";
         private int _port = 4403;
         private int _nodeCount = 0;
         private bool _isConnected = false;
+
+        /// <summary>
+        /// Gets the MeshtasticModule instance.
+        /// </summary>
+        private MeshtasticModule Module => MeshtasticModule.Instance;
 
         public MeshtasticDockPane()
         {
             ConnectCommand = new DelegateCommand(OnConnect, CanConnect);
             DisconnectCommand = new DelegateCommand(OnDisconnect, CanDisconnect);
+
+            // Defer subscription until module is available
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Loaded,
+                new Action(InitializeFromModule));
+        }
+
+        private void InitializeFromModule()
+        {
+            var module = Module;
+            if (module != null)
+            {
+                // Load saved settings
+                Hostname = module.Settings.Hostname ?? "192.168.1.117";
+                Port = module.Settings.Port > 0 ? module.Settings.Port : 4403;
+
+                // Subscribe to connection state changes
+                module.ConnectionStateChanged += OnModuleConnectionStateChanged;
+
+                // Initialize state from module
+                UpdateConnectionState(module.ConnectionState);
+            }
+        }
+
+        private void OnModuleConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
+        {
+            // Marshal to UI thread if needed
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                UpdateConnectionState(e.NewState);
+                var module = Module;
+                if (module != null)
+                {
+                    NodeCount = module.NodeCount;
+                }
+            });
         }
 
         #region Properties
@@ -108,11 +147,17 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void OnConnect()
         {
+            var module = Module;
+            if (module == null)
+            {
+                ConnectionStatus = "Error: Module not loaded";
+                System.Diagnostics.Debug.WriteLine("[MeshtasticDockPane] Module not available");
+                return;
+            }
+
             ConnectionStatus = "Connecting...";
-            // TODO: Call MeshtasticModule.ConnectAsync(Hostname, Port)
-            // For now, simulate connection
-            IsConnected = true;
-            ConnectionStatus = $"Connected to {Hostname}:{Port}";
+            System.Diagnostics.Debug.WriteLine($"[MeshtasticDockPane] Connecting to {Hostname}:{Port}");
+            module.ConnectAsync(Hostname, Port);
         }
 
         private bool CanDisconnect()
@@ -122,8 +167,15 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void OnDisconnect()
         {
+            var module = Module;
+            if (module == null)
+            {
+                return;
+            }
+
             ConnectionStatus = "Disconnecting...";
-            // TODO: Call MeshtasticModule.DisconnectAsync()
+            System.Diagnostics.Debug.WriteLine("[MeshtasticDockPane] Disconnecting");
+            module.DisconnectAsync();
             IsConnected = false;
             ConnectionStatus = "Disconnected";
             NodeCount = 0;
@@ -134,22 +186,22 @@ namespace WinTakMeshtasticPlugin.UI
         /// <summary>
         /// Update connection state from external events.
         /// </summary>
-        public void UpdateConnectionState(Connection.ConnectionState state)
+        public void UpdateConnectionState(ConnectionState state)
         {
             switch (state)
             {
-                case Connection.ConnectionState.Connected:
+                case ConnectionState.Connected:
                     IsConnected = true;
                     ConnectionStatus = $"Connected to {Hostname}:{Port}";
                     break;
-                case Connection.ConnectionState.Disconnected:
+                case ConnectionState.Disconnected:
                     IsConnected = false;
                     ConnectionStatus = "Disconnected";
                     break;
-                case Connection.ConnectionState.Connecting:
+                case ConnectionState.Connecting:
                     ConnectionStatus = "Connecting...";
                     break;
-                case Connection.ConnectionState.Reconnecting:
+                case ConnectionState.Reconnecting:
                     ConnectionStatus = "Reconnecting...";
                     break;
             }
