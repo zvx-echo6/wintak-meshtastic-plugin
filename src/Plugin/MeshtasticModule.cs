@@ -2,6 +2,9 @@ using System;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
 using System.Xml;
 using Prism.Events;
 using Prism.Mef.Modularity;
@@ -145,6 +148,12 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             // Apply saved outbound channel selection
             _channelManager.SelectedOutboundChannel = _settings.SelectedOutboundChannel;
+
+            // Queue startup logic to run after WinTAK finishes initialization
+            // This ensures MEF imports are populated before we try to use them
+            Application.Current?.Dispatcher?.BeginInvoke(
+                DispatcherPriority.ApplicationIdle,
+                new Action(() => Startup()));
         }
 
         /// <summary>
@@ -191,10 +200,32 @@ namespace WinTakMeshtasticPlugin.Plugin
                 _nodeStateManager.NodeRemoved += OnNodeRemoved;
 
                 // Auto-connect if enabled in settings
-                if (_settings.AutoConnect && !string.IsNullOrEmpty(_settings.Hostname))
+                if (_settings.AutoConnect && !string.IsNullOrWhiteSpace(_settings.Hostname))
                 {
+                    try
+                    {
+                        var logPath = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                        System.IO.File.AppendAllText(logPath,
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Auto-connect enabled, connecting to {_settings.Hostname}:{_settings.Port}\r\n");
+                    }
+                    catch { }
+
                     System.Diagnostics.Debug.WriteLine($"[Meshtastic] Auto-connecting to {_settings.Hostname}:{_settings.Port}");
                     ConnectAsync(_settings.Hostname, _settings.Port);
+                }
+                else
+                {
+                    try
+                    {
+                        var logPath = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                        System.IO.File.AppendAllText(logPath,
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Auto-connect disabled (AutoConnect={_settings.AutoConnect}, Hostname='{_settings.Hostname}')\r\n");
+                    }
+                    catch { }
                 }
 
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initialized successfully");
