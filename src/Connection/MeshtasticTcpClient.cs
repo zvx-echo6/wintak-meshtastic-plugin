@@ -62,6 +62,11 @@ namespace WinTakMeshtasticPlugin.Connection
         public event EventHandler<ChannelReceivedEventArgs>? ChannelReceived;
 
         /// <summary>
+        /// Event raised when NodeInfo is received from FromRadio (config dump).
+        /// </summary>
+        public event EventHandler<NodeInfoReceivedEventArgs>? NodeInfoReceived;
+
+        /// <summary>
         /// Event raised when connection state changes.
         /// </summary>
         public event EventHandler<ConnectionStateChangedEventArgs>? StateChanged;
@@ -317,6 +322,13 @@ namespace WinTakMeshtasticPlugin.Connection
                                 ChannelReceived?.Invoke(this, new ChannelReceivedEventArgs(channel, ConnectionId));
                                 break;
 
+                            case FromRadio.PayloadVariantOneofCase.NodeInfo:
+                                var nodeInfo = fromRadio.NodeInfo;
+                                _logger?.LogDebug("Received NodeInfo: num={NodeNum:X8}, user={User}",
+                                    nodeInfo.Num, nodeInfo.User?.ShortName);
+                                NodeInfoReceived?.Invoke(this, new NodeInfoReceivedEventArgs(nodeInfo, ConnectionId));
+                                break;
+
                             default:
                                 _logger?.LogDebug("Received FromRadio with payload type: {Type}",
                                     fromRadio.PayloadVariantCase);
@@ -524,6 +536,21 @@ namespace WinTakMeshtasticPlugin.Connection
         public ChannelReceivedEventArgs(Channel channel, string connectionId)
         {
             Channel = channel;
+            ConnectionId = connectionId;
+        }
+    }
+
+    /// <summary>
+    /// Event args for NodeInfo received events (from config dump).
+    /// </summary>
+    public class NodeInfoReceivedEventArgs : EventArgs
+    {
+        public Meshtastic.Protobufs.NodeInfo NodeInfo { get; }
+        public string ConnectionId { get; }
+
+        public NodeInfoReceivedEventArgs(Meshtastic.Protobufs.NodeInfo nodeInfo, string connectionId)
+        {
+            NodeInfo = nodeInfo;
             ConnectionId = connectionId;
         }
     }

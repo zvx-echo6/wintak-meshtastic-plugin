@@ -236,6 +236,56 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
+        /// Handle NodeInfo received from config dump.
+        /// This populates the node state with shortnames before position packets arrive.
+        /// </summary>
+        private void OnNodeInfoReceived(object? sender, NodeInfoReceivedEventArgs e)
+        {
+            var info = e.NodeInfo;
+            if (info == null) return;
+
+            var nodeState = _nodeStateManager.GetOrCreate(e.ConnectionId, info.Num);
+
+            // Store user info (shortname, longname, hardware)
+            if (info.User != null)
+            {
+                if (!string.IsNullOrEmpty(info.User.ShortName))
+                    nodeState.ShortName = info.User.ShortName;
+                if (!string.IsNullOrEmpty(info.User.LongName))
+                    nodeState.LongName = info.User.LongName;
+                if (info.User.HwModel != Meshtastic.Protobufs.HardwareModel.Unset)
+                    nodeState.HardwareModel = info.User.HwModel.ToString();
+            }
+
+            // Store position if present
+            if (info.Position != null && info.Position.LatitudeI != 0 && info.Position.LongitudeI != 0)
+            {
+                nodeState.Latitude = info.Position.LatitudeI / 1e7;
+                nodeState.Longitude = info.Position.LongitudeI / 1e7;
+                if (info.Position.Altitude != 0)
+                    nodeState.Altitude = info.Position.Altitude;
+            }
+
+            // Store last heard time
+            if (info.LastHeard > 0)
+            {
+                nodeState.LastHeard = DateTimeOffset.FromUnixTimeSeconds(info.LastHeard).UtcDateTime;
+            }
+
+            _nodeStateManager.Update(nodeState);
+
+            // If we have position, inject CoT immediately
+            if (nodeState.Latitude.HasValue && nodeState.Longitude.HasValue)
+            {
+                InjectNodePosition(nodeState);
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Meshtastic] NodeInfo from config: {nodeState.DisplayName} " +
+                $"(pos: {nodeState.Latitude?.ToString("F5") ?? "none"}, {nodeState.Longitude?.ToString("F5") ?? "none"})");
+        }
+
+        /// <summary>
         /// Handle channel state changes for settings persistence.
         /// </summary>
         private void OnChannelChanged(object? sender, ChannelChangedEventArgs e)
@@ -387,6 +437,7 @@ namespace WinTakMeshtasticPlugin.Plugin
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
+                _client.NodeInfoReceived -= OnNodeInfoReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
@@ -412,6 +463,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             _client = new MeshtasticTcpClient(config);
             _client.PacketReceived += OnPacketReceived;
             _client.ChannelReceived += OnChannelReceived;
+            _client.NodeInfoReceived += OnNodeInfoReceived;
             _client.StateChanged += OnConnectionStateChanged;
 
             // Create outbound message service
@@ -480,6 +532,7 @@ namespace WinTakMeshtasticPlugin.Plugin
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
+                _client.NodeInfoReceived -= OnNodeInfoReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
@@ -520,6 +573,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             {
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
+                _client.NodeInfoReceived -= OnNodeInfoReceived;
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
