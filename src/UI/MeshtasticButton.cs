@@ -12,9 +12,8 @@ namespace WinTakMeshtasticPlugin.UI
     [Button(
         "MeshtasticButton",
         "Meshtastic",
-        LargeImage = "meshtastic_icon.png",
-        SmallImage = "meshtastic_icon_24.png",
-        ResourceFileType = typeof(MeshtasticButton))]
+        LargeImage = "pack://application:,,,/WinTakMeshtasticPlugin;component/Assets/Meshtastic_Logo_32x32.png",
+        SmallImage = "pack://application:,,,/WinTakMeshtasticPlugin;component/Assets/Meshtastic_Logo_24x24.png")]
     [Export]
     public class MeshtasticButton : Button
     {
