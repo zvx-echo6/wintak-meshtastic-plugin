@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Xml;
 using Prism.Events;
+using Prism.Mef.Modularity;
+using Prism.Modularity;
 using WinTakMeshtasticPlugin.Helpers;
 using WinTak.Common.CoT;
 using WinTak.Common.Services;
@@ -21,8 +23,8 @@ namespace WinTakMeshtasticPlugin.Plugin
     /// Main entry point for the Meshtastic WinTAK plugin.
     /// Uses MEF (Managed Extensibility Framework) for plugin composition.
     /// </summary>
-    [Export(typeof(ITakModule))]
-    public class MeshtasticModule : ITakModule
+    [ModuleExport(typeof(MeshtasticModule), InitializationMode = InitializationMode.WhenAvailable)]
+    public class MeshtasticModule : IModule, ITakModule
     {
         // Static constructor for early diagnostics
         static MeshtasticModule()
@@ -47,18 +49,25 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// Event raised when connection state changes.
         /// </summary>
         public event EventHandler<ConnectionStateChangedEventArgs> ConnectionStateChanged;
-        private readonly IEventAggregator _eventAggregator;
-        private readonly ICotMessageSender _cotMessageSender;
-        private readonly ICotMessageReceiver _cotMessageReceiver;
-        private readonly ILocationService _locationService;
-        private readonly ICommunicationService _communicationService;
 
-        private readonly IHandlerRegistry _handlerRegistry;
-        private readonly ICotBuilder _cotBuilder;
-        private readonly NodeStateManager _nodeStateManager;
-        private readonly ChannelManager _channelManager;
-        private readonly ChannelHandler _channelHandler;
-        private readonly PluginSettings _settings;
+        // MEF-injected services (use property injection instead of constructor)
+        [Import]
+        private IEventAggregator _eventAggregator = null!;
+        [Import]
+        private ICotMessageSender _cotMessageSender = null!;
+        [Import]
+        private ICotMessageReceiver _cotMessageReceiver = null!;
+        [Import]
+        private ILocationService _locationService = null!;
+        [Import]
+        private ICommunicationService _communicationService = null!;
+
+        private IHandlerRegistry _handlerRegistry = null!;
+        private ICotBuilder _cotBuilder = null!;
+        private NodeStateManager _nodeStateManager = null!;
+        private ChannelManager _channelManager = null!;
+        private ChannelHandler _channelHandler = null!;
+        private PluginSettings _settings = null!;
 
         private MeshtasticTcpClient? _client;
         private OutboundMessageService? _outboundMessageService;
@@ -86,26 +95,42 @@ namespace WinTakMeshtasticPlugin.Plugin
         public IOutboundMessageService? OutboundMessageService => _outboundMessageService;
 
         /// <summary>
-        /// MEF constructor with dependency injection.
-        /// WinTAK provides all services via MEF composition.
+        /// Parameterless constructor for MEF.
+        /// Services are injected via [Import] properties.
         /// </summary>
-        [ImportingConstructor]
-        public MeshtasticModule(
-            IEventAggregator eventAggregator,
-            ICotMessageSender cotMessageSender,
-            ICotMessageReceiver cotMessageReceiver,
-            ILocationService locationService,
-            ICommunicationService communicationService)
+        public MeshtasticModule()
         {
-            _eventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
-            _cotMessageSender = cotMessageSender ?? throw new ArgumentNullException(nameof(cotMessageSender));
-            _cotMessageReceiver = cotMessageReceiver ?? throw new ArgumentNullException(nameof(cotMessageReceiver));
-            _locationService = locationService ?? throw new ArgumentNullException(nameof(locationService));
-            _communicationService = communicationService ?? throw new ArgumentNullException(nameof(communicationService));
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Constructor called\r\n");
+            }
+            catch { }
+        }
 
-            // Load settings from disk
+        /// <summary>
+        /// Called by WinTAK during module initialization phase.
+        /// </summary>
+        public void Initialize()
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Initialize called\r\n");
+            }
+            catch { }
+
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initializing...");
+            Instance = this;
+
+            // Initialize components (was in constructor before)
             _settings = PluginSettings.Load();
-
             _handlerRegistry = new HandlerRegistry();
             _cotBuilder = new CotBuilder();
             _nodeStateManager = new NodeStateManager();
@@ -123,21 +148,20 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
-        /// Called by WinTAK during module initialization phase.
-        /// </summary>
-        public void Initialize()
-        {
-            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initializing...");
-            Instance = this;
-        }
-
-        /// <summary>
         /// Called by WinTAK after all modules are initialized.
         /// Start background services and establish connections.
         /// </summary>
         public void Startup()
         {
-            System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin starting up...");
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Startup called\r\n");
+            }
+            catch { }
 
             try
             {
@@ -341,9 +365,18 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// <param name="port">TCP port (default 4403, must be configurable per requirements).</param>
         public async void ConnectAsync(string hostname, int port)
         {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ConnectAsync called: {hostname}:{port}\r\n");
+            }
+            catch { }
+
             if (string.IsNullOrWhiteSpace(hostname))
             {
-                System.Diagnostics.Debug.WriteLine("[Meshtastic] Cannot connect: hostname is required");
                 return;
             }
 
@@ -387,14 +420,32 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             try
             {
-                if (_cts != null)
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+
+                if (_cts == null)
                 {
-                    await _client.ConnectAsync(_cts.Token);
+                    System.IO.File.AppendAllText(logPath,
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ERROR: _cts is null\r\n");
+                    return;
                 }
+
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Calling _client.ConnectAsync...\r\n");
+
+                await _client.ConnectAsync(_cts.Token);
+
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ConnectAsync completed successfully\r\n");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Connection failed: {ex.Message}");
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Connection error: {ex.Message}\r\n");
             }
         }
 

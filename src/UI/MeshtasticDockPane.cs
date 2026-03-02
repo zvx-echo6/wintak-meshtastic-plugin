@@ -147,16 +147,24 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void OnConnect()
         {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - OnConnect called, Module={Module != null}\r\n");
+            }
+            catch { }
+
             var module = Module;
             if (module == null)
             {
                 ConnectionStatus = "Error: Module not loaded";
-                System.Diagnostics.Debug.WriteLine("[MeshtasticDockPane] Module not available");
                 return;
             }
 
             ConnectionStatus = "Connecting...";
-            System.Diagnostics.Debug.WriteLine($"[MeshtasticDockPane] Connecting to {Hostname}:{Port}");
             module.ConnectAsync(Hostname, Port);
         }
 
