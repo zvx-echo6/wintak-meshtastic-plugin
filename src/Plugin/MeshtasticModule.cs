@@ -576,6 +576,16 @@ namespace WinTakMeshtasticPlugin.Plugin
 
         private async void OnPacketReceived(object sender, MeshPacketReceivedEventArgs e)
         {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Packet received from {e.Packet.From:X8}\r\n");
+            }
+            catch { }
+
             // Get the handler for this packet's portnum
             var decoded = e.Packet.Decoded;
             if (decoded == null)
@@ -583,6 +593,16 @@ namespace WinTakMeshtasticPlugin.Plugin
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Received encrypted packet (no handler)");
                 return;
             }
+
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Portnum: {decoded.Portnum}\r\n");
+            }
+            catch { }
 
             var handler = _handlerRegistry.GetHandler(decoded.Portnum);
             if (handler == null)

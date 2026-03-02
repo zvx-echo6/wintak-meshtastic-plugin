@@ -44,14 +44,19 @@
 
   <!-- NuGet Packages -->
   <ItemGroup>
-    <!-- Protobuf support -->
-    <PackageReference Include="Google.Protobuf" Version="3.25.1" />
-
     <!-- Logging -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
 
     <!-- JSON serialization (for settings) -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!-- Use WinTAK's Google.Protobuf to avoid assembly conflicts -->
+  <ItemGroup>
+    <Reference Include="Google.Protobuf">
+      <HintPath>$(WinTakDir)\Google.Protobuf.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <!-- WinTAK SDK - Direct DLL references (do not copy to output) -->
@@ -167,13 +172,11 @@
     <!-- Copy main assembly -->
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(WinTakPluginsDir)" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
-    <!-- Copy dependencies not provided by WinTAK -->
-    <Copy SourceFiles="$(TargetDir)Google.Protobuf.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Google.Protobuf.dll')" />
-    <Copy SourceFiles="$(TargetDir)System.Memory.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)System.Memory.dll')" />
-    <Copy SourceFiles="$(TargetDir)System.Buffers.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)System.Buffers.dll')" />
-    <Copy SourceFiles="$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll')" />
-    <Copy SourceFiles="$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll')" />
-    <Copy SourceFiles="$(TargetDir)System.Threading.Tasks.Extensions.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)System.Threading.Tasks.Extensions.dll')" />
+    <!-- Copy ONLY dependencies not provided by WinTAK -->
+    <!-- DO NOT copy Google.Protobuf or its dependencies - WinTAK provides these -->
+    <Copy SourceFiles="$(TargetDir)Newtonsoft.Json.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Newtonsoft.Json.dll')" />
+    <Copy SourceFiles="$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Microsoft.Extensions.Logging.Abstractions.dll')" />
+    <Copy SourceFiles="$(TargetDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll" DestinationFolder="$(WinTakPluginsDir)" Condition="Exists('$(TargetDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll')" />
     <Message Text="Deployed $(AssemblyName) to $(WinTakPluginsDir)" Importance="high" />
   </Target>
 

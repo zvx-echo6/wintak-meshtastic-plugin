@@ -98,6 +98,9 @@ namespace WinTakMeshtasticPlugin.Connection
 
                 // Start background read loop
                 _readLoopTask = Task.Run(() => ReadLoopAsync(_cts.Token), _cts.Token);
+
+                // Send want_config to trigger node to send its configuration
+                await SendWantConfigAsync(_cts.Token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -133,6 +136,50 @@ namespace WinTakMeshtasticPlugin.Connection
         }
 
         /// <summary>
+        /// Send want_config request to trigger node to send its configuration.
+        /// </summary>
+        private async Task SendWantConfigAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Sending want_config request\r\n");
+            }
+            catch { }
+
+            var toRadio = new ToRadio
+            {
+                WantConfigId = (uint)new Random().Next(1, int.MaxValue)
+            };
+
+            var data = toRadio.ToByteArray();
+
+            // Meshtastic TCP protocol: 4-byte header (0x94 0xc3 + 2-byte length) + protobuf data
+            var header = new byte[4];
+            header[0] = 0x94;
+            header[1] = 0xc3;
+            header[2] = (byte)((data.Length >> 8) & 0xFF);
+            header[3] = (byte)(data.Length & 0xFF);
+
+            await _stream.WriteAsync(header, 0, header.Length, cancellationToken).ConfigureAwait(false);
+            await _stream.WriteAsync(data, 0, data.Length, cancellationToken).ConfigureAwait(false);
+            await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - want_config sent successfully\r\n");
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Send a MeshPacket to the Meshtastic node.
         /// </summary>
         public async Task SendPacketAsync(MeshPacket packet, CancellationToken cancellationToken = default)
@@ -165,6 +212,16 @@ namespace WinTakMeshtasticPlugin.Connection
         /// </summary>
         private async Task ReadLoopAsync(CancellationToken cancellationToken)
         {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ReadLoop started\r\n");
+            }
+            catch { }
+
             var headerBuffer = new byte[4];
 
             while (!cancellationToken.IsCancellationRequested && _stream != null)
@@ -177,6 +234,15 @@ namespace WinTakMeshtasticPlugin.Connection
 
                     if (headerBytesRead < 4)
                     {
+                        try
+                        {
+                            var logPath = System.IO.Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                                "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                            System.IO.File.AppendAllText(logPath,
+                                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Connection closed (header incomplete)\r\n");
+                        }
+                        catch { }
                         _logger?.LogWarning("Connection closed while reading header");
                         break;
                     }
@@ -184,6 +250,15 @@ namespace WinTakMeshtasticPlugin.Connection
                     // Validate magic bytes
                     if (headerBuffer[0] != 0x94 || headerBuffer[1] != 0xc3)
                     {
+                        try
+                        {
+                            var logPath = System.IO.Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                                "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                            System.IO.File.AppendAllText(logPath,
+                                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Invalid magic: {headerBuffer[0]:X2} {headerBuffer[1]:X2}\r\n");
+                        }
+                        catch { }
                         _logger?.LogWarning("Invalid magic bytes: {B0:X2} {B1:X2}",
                             headerBuffer[0], headerBuffer[1]);
                         continue;
@@ -214,6 +289,16 @@ namespace WinTakMeshtasticPlugin.Connection
                     {
                         var fromRadio = FromRadio.Parser.ParseFrom(dataBuffer);
                         _lastPacketTime = DateTime.UtcNow;
+
+                        try
+                        {
+                            var logPath = System.IO.Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                                "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                            System.IO.File.AppendAllText(logPath,
+                                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - FromRadio: {fromRadio.PayloadVariantCase}\r\n");
+                        }
+                        catch { }
 
                         // Handle different FromRadio payload types
                         switch (fromRadio.PayloadVariantCase)
@@ -295,6 +380,9 @@ namespace WinTakMeshtasticPlugin.Connection
 
                     // Restart read loop
                     _readLoopTask = Task.Run(() => ReadLoopAsync(cancellationToken), cancellationToken);
+
+                    // Send want_config to trigger node to send its configuration
+                    await SendWantConfigAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 catch (Exception ex)
