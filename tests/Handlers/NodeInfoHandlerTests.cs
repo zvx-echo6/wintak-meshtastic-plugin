@@ -50,7 +50,7 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
             {
                 ShortName = "NODE",
                 LongName = "Test Node Device",
-                HwModel = HardwareModel.TloraV21p6,
+                HwModel = HardwareModel.TloraV211P6,
                 Role = Config.Types.DeviceConfig.Types.Role.Client
             };
 

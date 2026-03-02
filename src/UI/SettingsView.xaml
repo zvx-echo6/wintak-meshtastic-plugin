@@ -55,16 +55,17 @@
                              Width="80"
                              HorizontalAlignment="Left"/>
 
+                    <!-- Auto-connect on startup -->
+                    <CheckBox Content="Automatically connect when WinTAK starts"
+                              IsChecked="{Binding AutoConnect}"
+                              Margin="0,0,0,10"
+                              ToolTip="When enabled, the plugin will automatically connect to this Meshtastic node when WinTAK starts"/>
+
                     <!-- Connect/Disconnect Button -->
                     <Button Content="{Binding ConnectButtonText}"
                             Command="{Binding ConnectCommand}"
                             Padding="15,8"
                             HorizontalAlignment="Left"/>
-
-                    <!-- Auto-connect -->
-                    <CheckBox Content="Auto-connect on startup"
-                              IsChecked="{Binding AutoConnect}"
-                              Margin="0,10,0,0"/>
                 </StackPanel>
             </GroupBox>
 
