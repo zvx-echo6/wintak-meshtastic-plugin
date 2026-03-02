@@ -24,6 +24,20 @@ namespace WinTakMeshtasticPlugin.Plugin
     [Export(typeof(ITakModule))]
     public class MeshtasticModule : ITakModule
     {
+        // Static constructor for early diagnostics
+        static MeshtasticModule()
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Static constructor called\r\n");
+            }
+            catch { }
+        }
+
         /// <summary>
         /// Static instance for access from UI components.
         /// </summary>
