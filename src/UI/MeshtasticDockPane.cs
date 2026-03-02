@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Windows;
 using System.Windows.Input;
 using Prism.Commands;
 using WinTak.Framework.Docking;
@@ -14,7 +15,7 @@ namespace WinTakMeshtasticPlugin.UI
 {
     /// <summary>
     /// ViewModel for the Meshtastic dockable panel.
-    /// Provides connection status, node list, chat, and settings UI.
+    /// Provides connection status, node list, and settings access.
     /// </summary>
     [DockPane(Id, "Meshtastic", Content = typeof(MeshtasticView))]
     [Export]
@@ -23,12 +24,12 @@ namespace WinTakMeshtasticPlugin.UI
         public const string Id = "MeshtasticDockPane";
 
         private string _connectionStatus = "Disconnected";
-        private string _hostname = "192.168.1.117";
+        private string _hostname = "localhost";
         private int _port = 4403;
         private int _nodeCount = 0;
         private bool _isConnected = false;
         private ObservableCollection<NodeState> _nodes = new ObservableCollection<NodeState>();
-        private System.Windows.Threading.DispatcherTimer? _refreshTimer;
+        private System.Windows.Threading.DispatcherTimer _refreshTimer;
 
         /// <summary>
         /// Observable collection of mesh nodes for UI binding.
@@ -48,9 +49,10 @@ namespace WinTakMeshtasticPlugin.UI
         {
             ConnectCommand = new DelegateCommand(OnConnect, CanConnect);
             DisconnectCommand = new DelegateCommand(OnDisconnect, CanDisconnect);
+            OpenSettingsCommand = new DelegateCommand(OnOpenSettings);
 
-            // Defer subscription until module is available
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
+            // Defer initialization until module is available
+            Application.Current?.Dispatcher?.BeginInvoke(
                 System.Windows.Threading.DispatcherPriority.Loaded,
                 new Action(InitializeFromModule));
         }
@@ -60,9 +62,10 @@ namespace WinTakMeshtasticPlugin.UI
             var module = Module;
             if (module != null)
             {
-                // Load saved settings
-                Hostname = module.Settings.Hostname ?? "192.168.1.117";
-                Port = module.Settings.Port > 0 ? module.Settings.Port : 4403;
+                // Load hostname/port from saved settings - NOT hardcoded
+                var settings = module.Settings;
+                Hostname = !string.IsNullOrWhiteSpace(settings.Hostname) ? settings.Hostname : "localhost";
+                Port = settings.Port > 0 ? settings.Port : 4403;
 
                 // Subscribe to connection state changes
                 module.ConnectionStateChanged += OnModuleConnectionStateChanged;
@@ -75,7 +78,7 @@ namespace WinTakMeshtasticPlugin.UI
         private void OnModuleConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
             // Marshal to UI thread if needed
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            Application.Current?.Dispatcher?.Invoke(() =>
             {
                 UpdateConnectionState(e.NewState);
                 RefreshNodes();
@@ -104,7 +107,7 @@ namespace WinTakMeshtasticPlugin.UI
             _refreshTimer.Start();
 
             // Do an immediate refresh after a short delay to catch config dump
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
+            Application.Current?.Dispatcher?.BeginInvoke(
                 System.Windows.Threading.DispatcherPriority.Background,
                 new Action(() =>
                 {
@@ -207,6 +210,11 @@ namespace WinTakMeshtasticPlugin.UI
         /// </summary>
         public ICommand DisconnectCommand { get; }
 
+        /// <summary>
+        /// Command to open the settings dialog.
+        /// </summary>
+        public ICommand OpenSettingsCommand { get; }
+
         private bool CanConnect()
         {
             return !IsConnected && !string.IsNullOrWhiteSpace(Hostname);
@@ -214,16 +222,6 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void OnConnect()
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - OnConnect called, Module={Module != null}\r\n");
-            }
-            catch { }
-
             var module = Module;
             if (module == null)
             {
@@ -232,6 +230,13 @@ namespace WinTakMeshtasticPlugin.UI
             }
 
             ConnectionStatus = "Connecting...";
+
+            // Save the hostname/port to settings on every connect attempt
+            // so auto-connect will use the last attempted connection
+            module.Settings.Hostname = Hostname;
+            module.Settings.Port = Port;
+            module.Settings.Save();
+
             module.ConnectAsync(Hostname, Port);
         }
 
@@ -249,11 +254,33 @@ namespace WinTakMeshtasticPlugin.UI
             }
 
             ConnectionStatus = "Disconnecting...";
-            System.Diagnostics.Debug.WriteLine("[MeshtasticDockPane] Disconnecting");
             module.DisconnectAsync();
             IsConnected = false;
             ConnectionStatus = "Disconnected";
             NodeCount = 0;
+        }
+
+        private void OnOpenSettings()
+        {
+            var module = Module;
+            if (module == null)
+            {
+                MessageBox.Show("Plugin not initialized.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Open settings dialog with the actual settings instance
+            var settingsWindow = new SettingsWindow(module.Settings)
+            {
+                Owner = Application.Current?.MainWindow
+            };
+
+            if (settingsWindow.ShowDialog() == true)
+            {
+                // Settings were saved - update UI with new values
+                Hostname = module.Settings.Hostname;
+                Port = module.Settings.Port;
+            }
         }
 
         #endregion

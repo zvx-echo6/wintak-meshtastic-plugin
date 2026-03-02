@@ -230,8 +230,10 @@
 
         <!-- Bottom Toolbar -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="Settings" Width="70" Margin="0,0,8,0" ToolTip="Open plugin settings"/>
-            <Button Content="Chat" Width="70" ToolTip="Open mesh chat panel"/>
+            <Button Content="Settings" Width="70" Margin="0,0,8,0"
+                    Command="{Binding OpenSettingsCommand}"
+                    ToolTip="Open plugin settings"/>
+            <Button Content="Chat" Width="70" ToolTip="Open mesh chat panel (coming soon)" IsEnabled="False"/>
         </StackPanel>
     </Grid>
 </UserControl>
