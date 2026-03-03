@@ -37,13 +37,23 @@ namespace WinTakMeshtasticPlugin.Plugin
         // Static constructor for early diagnostics
         static MeshtasticModule()
         {
+            WriteLog("Static constructor called");
+        }
+
+        /// <summary>
+        /// Writes a timestamped message to load.log, ensuring directory exists.
+        /// </summary>
+        private static void WriteLog(string message)
+        {
             try
             {
-                var logPath = System.IO.Path.Combine(
+                var logDir = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                    "wintak", "plugins", "WinTakMeshtasticPlugin");
+                System.IO.Directory.CreateDirectory(logDir);
+                var logPath = System.IO.Path.Combine(logDir, "load.log");
                 System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Static constructor called\r\n");
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\r\n");
             }
             catch { }
         }
@@ -113,15 +123,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// </summary>
         public MeshtasticModule()
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Constructor called\r\n");
-            }
-            catch { }
+            WriteLog("Constructor called");
         }
 
         /// <summary>
@@ -129,15 +131,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// </summary>
         public void Initialize()
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Initialize called\r\n");
-            }
-            catch { }
+            WriteLog("Initialize called");
 
             System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initializing...");
             Instance = this;
@@ -146,17 +140,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             _settings = PluginSettings.Load();
 
             // Log loaded settings for debugging auto-connect and hostname issues
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Settings loaded: " +
-                    $"Hostname='{_settings.Hostname}', Port={_settings.Port}, " +
-                    $"AutoConnect={_settings.AutoConnect}\r\n");
-            }
-            catch { }
+            WriteLog($"Settings loaded: Hostname='{_settings.Hostname}', Port={_settings.Port}, AutoConnect={_settings.AutoConnect}");
 
             _handlerRegistry = new HandlerRegistry();
             _cotBuilder = new CotBuilder { DisplayNameMode = _settings.DisplayNameMode };
@@ -186,15 +170,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// </summary>
         public void Startup()
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Startup called\r\n");
-            }
-            catch { }
+            WriteLog("Startup called");
 
             try
             {
@@ -237,56 +213,23 @@ namespace WinTakMeshtasticPlugin.Plugin
                 if (_mapViewController != null)
                 {
                     _mapViewController.ItemClick += OnMapItemClick;
-                    try
-                    {
-                        var logPath = System.IO.Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                        System.IO.File.AppendAllText(logPath,
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Subscribed to IMapViewController.ItemClick\r\n");
-                    }
-                    catch { }
+                    WriteLog("Subscribed to IMapViewController.ItemClick");
                 }
                 else
                 {
-                    try
-                    {
-                        var logPath = System.IO.Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                        System.IO.File.AppendAllText(logPath,
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - WARNING: _mapViewController is NULL - cannot subscribe to ItemClick\r\n");
-                    }
-                    catch { }
+                    WriteLog("WARNING: _mapViewController is NULL - cannot subscribe to ItemClick");
                 }
 
                 // Auto-connect if enabled in settings
                 if (_settings.AutoConnect && !string.IsNullOrWhiteSpace(_settings.Hostname))
                 {
-                    try
-                    {
-                        var logPath = System.IO.Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                        System.IO.File.AppendAllText(logPath,
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Auto-connect enabled, connecting to {_settings.Hostname}:{_settings.Port}\r\n");
-                    }
-                    catch { }
-
+                    WriteLog($"Auto-connect enabled, connecting to {_settings.Hostname}:{_settings.Port}");
                     System.Diagnostics.Debug.WriteLine($"[Meshtastic] Auto-connecting to {_settings.Hostname}:{_settings.Port}");
                     ConnectAsync(_settings.Hostname, _settings.Port);
                 }
                 else
                 {
-                    try
-                    {
-                        var logPath = System.IO.Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                        System.IO.File.AppendAllText(logPath,
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Auto-connect disabled (AutoConnect={_settings.AutoConnect}, Hostname='{_settings.Hostname}')\r\n");
-                    }
-                    catch { }
+                    WriteLog($"Auto-connect disabled (AutoConnect={_settings.AutoConnect}, Hostname='{_settings.Hostname}')");
                 }
 
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin initialized successfully");
@@ -579,27 +522,16 @@ namespace WinTakMeshtasticPlugin.Plugin
         private void OnMapItemClick(object sender, MapMouseEventArgs e)
         {
             // DIAGNOSTIC: Log that the event fired
-            try
+            WriteLog("MAP CLICK EVENT FIRED");
+            WriteLog($"e.Item type: {e.Item?.GetType().FullName ?? "null"}");
+            WriteLog($"e.MapItems count: {e.MapItems?.Count ?? 0}");
+            if (e.MapItems != null)
             {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - MAP CLICK EVENT FIRED\r\n");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - e.Item type: {e.Item?.GetType().FullName ?? "null"}\r\n");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - e.MapItems count: {e.MapItems?.Count ?? 0}\r\n");
-                if (e.MapItems != null)
+                foreach (var item in e.MapItems)
                 {
-                    foreach (var item in e.MapItems)
-                    {
-                        System.IO.File.AppendAllText(logPath,
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - MapItem: {item?.GetType().FullName ?? "null"}\r\n");
-                    }
+                    WriteLog($"MapItem: {item?.GetType().FullName ?? "null"}");
                 }
             }
-            catch { }
 
             System.Diagnostics.Debug.WriteLine("[Meshtastic] MAP CLICK EVENT FIRED");
             System.Diagnostics.Debug.WriteLine($"[Meshtastic] e.Item type: {e.Item?.GetType().FullName ?? "null"}");
@@ -621,16 +553,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             if (marker != null)
             {
                 string uid = marker.Uid;
-
-                try
-                {
-                    var logPath = System.IO.Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                    System.IO.File.AppendAllText(logPath,
-                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Marker UID: {uid ?? "null"}\r\n");
-                }
-                catch { }
+                WriteLog($"Marker UID: {uid ?? "null"}");
 
                 // Check if this is a mesh node marker (UID format: MESH-{connectionId}-{nodeId:X8})
                 if (!string.IsNullOrEmpty(uid) && uid.StartsWith("MESH-"))
@@ -710,15 +633,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// <param name="port">TCP port (default 4403, must be configurable per requirements).</param>
         public async void ConnectAsync(string hostname, int port)
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ConnectAsync called: {hostname}:{port}\r\n");
-            }
-            catch { }
+            WriteLog($"ConnectAsync called: {hostname}:{port}");
 
             if (string.IsNullOrWhiteSpace(hostname))
             {
@@ -767,32 +682,19 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             try
             {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-
                 if (_cts == null)
                 {
-                    System.IO.File.AppendAllText(logPath,
-                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ERROR: _cts is null\r\n");
+                    WriteLog("ERROR: _cts is null");
                     return;
                 }
 
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Calling _client.ConnectAsync...\r\n");
-
+                WriteLog("Calling _client.ConnectAsync...");
                 await _client.ConnectAsync(_cts.Token);
-
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - ConnectAsync completed successfully\r\n");
+                WriteLog("ConnectAsync completed successfully");
             }
             catch (Exception ex)
             {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Connection error: {ex.Message}\r\n");
+                WriteLog($"Connection error: {ex.Message}");
             }
         }
 
@@ -945,15 +847,7 @@ namespace WinTakMeshtasticPlugin.Plugin
 
         private async void OnPacketReceived(object sender, MeshPacketReceivedEventArgs e)
         {
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Packet received from {e.Packet.From:X8}\r\n");
-            }
-            catch { }
+            WriteLog($"Packet received from {e.Packet.From:X8}");
 
             // Get the handler for this packet's portnum
             var decoded = e.Packet.Decoded;
@@ -963,15 +857,7 @@ namespace WinTakMeshtasticPlugin.Plugin
                 return;
             }
 
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Portnum: {decoded.Portnum}\r\n");
-            }
-            catch { }
+            WriteLog($"Portnum: {decoded.Portnum}");
 
             var handler = _handlerRegistry.GetHandler(decoded.Portnum);
             if (handler == null)

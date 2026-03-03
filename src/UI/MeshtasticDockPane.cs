@@ -75,6 +75,40 @@ namespace WinTakMeshtasticPlugin.UI
             {
                 module.ConnectionStateChanged += OnModuleConnectionStateChanged;
                 UpdateConnectionState(module.ConnectionState);
+
+                // If already connected (e.g., auto-connect completed before we subscribed),
+                // start the refresh timer
+                if (module.ConnectionState == ConnectionState.Connected)
+                {
+                    StartRefreshTimer();
+                    RefreshNodes();
+                }
+            }
+            else
+            {
+                // Module not available yet - retry after a short delay
+                // This handles the case where MEF initialization order causes
+                // the DockPane to initialize before MeshtasticModule.Instance is set
+                Application.Current?.Dispatcher?.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(RetrySubscribeToModule));
+            }
+        }
+
+        private void RetrySubscribeToModule()
+        {
+            var module = Module;
+            if (module != null)
+            {
+                module.ConnectionStateChanged += OnModuleConnectionStateChanged;
+                UpdateConnectionState(module.ConnectionState);
+
+                // If already connected, start refresh timer
+                if (module.ConnectionState == ConnectionState.Connected)
+                {
+                    StartRefreshTimer();
+                    RefreshNodes();
+                }
             }
         }
 
