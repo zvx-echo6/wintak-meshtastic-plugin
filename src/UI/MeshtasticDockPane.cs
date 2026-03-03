@@ -60,18 +60,17 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void InitializeFromModule()
         {
+            // Load settings directly from disk - don't depend on MeshtasticModule.Instance
+            // which may not be set yet due to MEF initialization order
+            var settings = PluginSettings.Load();
+            Hostname = !string.IsNullOrWhiteSpace(settings.Hostname) ? settings.Hostname : "localhost";
+            Port = settings.Port > 0 ? settings.Port : 4403;
+
+            // Subscribe to module events if available
             var module = Module;
             if (module != null)
             {
-                // Load hostname/port from saved settings - NOT hardcoded
-                var settings = module.Settings;
-                Hostname = !string.IsNullOrWhiteSpace(settings.Hostname) ? settings.Hostname : "localhost";
-                Port = settings.Port > 0 ? settings.Port : 4403;
-
-                // Subscribe to connection state changes
                 module.ConnectionStateChanged += OnModuleConnectionStateChanged;
-
-                // Initialize state from module
                 UpdateConnectionState(module.ConnectionState);
             }
         }
