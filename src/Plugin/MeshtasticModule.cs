@@ -144,6 +144,20 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             // Initialize components (was in constructor before)
             _settings = PluginSettings.Load();
+
+            // Log loaded settings for debugging auto-connect and hostname issues
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Settings loaded: " +
+                    $"Hostname='{_settings.Hostname}', Port={_settings.Port}, " +
+                    $"AutoConnect={_settings.AutoConnect}\r\n");
+            }
+            catch { }
+
             _handlerRegistry = new HandlerRegistry();
             _cotBuilder = new CotBuilder { DisplayNameMode = _settings.DisplayNameMode };
             _nodeStateManager = new NodeStateManager();
@@ -810,6 +824,10 @@ namespace WinTakMeshtasticPlugin.Plugin
             if (_client != null)
             {
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting...");
+
+                // Clear topology overlay lines immediately on disconnect
+                _topologyOverlayManager?.ClearAllLinks();
+
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
@@ -835,6 +853,17 @@ namespace WinTakMeshtasticPlugin.Plugin
         public void Terminate()
         {
             System.Diagnostics.Debug.WriteLine("[Meshtastic] Plugin terminating...");
+
+            // Clear topology overlay lines immediately on shutdown
+            try
+            {
+                _topologyOverlayManager?.ClearAllLinks();
+                System.Diagnostics.Debug.WriteLine("[Meshtastic] Topology links cleared");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Failed to clear topology: {ex.Message}");
+            }
 
             // Save settings before shutdown
             try

@@ -31,7 +31,7 @@ namespace WinTakMeshtasticPlugin.Topology
         /// <param name="lon2">Longitude of second point.</param>
         /// <param name="strokeColor">Line color as ARGB signed int string.</param>
         /// <param name="strokeWeight">Line weight (1.0 - 4.0).</param>
-        /// <param name="staleMinutes">Minutes until link expires (default 30).</param>
+        /// <param name="staleMinutes">Minutes until link expires (default 5).</param>
         /// <param name="remarks">Optional remarks to embed in the CoT event.</param>
         public void DrawTopologyLink(
             string uid,
@@ -39,7 +39,7 @@ namespace WinTakMeshtasticPlugin.Topology
             double lat2, double lon2,
             string strokeColor = null,
             double strokeWeight = 2.0,
-            int staleMinutes = 30,
+            int staleMinutes = 5,
             string remarks = null)
         {
             // Center point is midpoint of line
@@ -110,7 +110,7 @@ namespace WinTakMeshtasticPlugin.Topology
             double lat1, double lon1,
             double lat2, double lon2,
             double snrDb,
-            int staleMinutes = 30)
+            int staleMinutes = 5)
         {
             string uid = TopologyLinkBuilder.BuildLinkUid(nodeIdA, nodeIdB);
             string color = TopologyLinkBuilder.GetSnrColor(snrDb);
