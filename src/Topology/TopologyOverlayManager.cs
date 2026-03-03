@@ -194,6 +194,82 @@ namespace WinTakMeshtasticPlugin.Topology
             }
         }
 
+        /// <summary>
+        /// Set of nodes that have per-node link display enabled.
+        /// Used independently of the global overlay toggle.
+        /// </summary>
+        private readonly HashSet<uint> _perNodeEnabled = new HashSet<uint>();
+
+        /// <summary>
+        /// Show links for a specific node (per-node toggle).
+        /// Works independently of the global overlay setting.
+        /// </summary>
+        /// <param name="nodeId">Node ID to show links for.</param>
+        public void ShowLinksForNode(uint nodeId)
+        {
+            lock (_lock)
+            {
+                _perNodeEnabled.Add(nodeId);
+
+                // Find and draw all links involving this node
+                var nodeLinks = _activeLinks
+                    .Where(kvp => kvp.Value.NodeIdA == nodeId || kvp.Value.NodeIdB == nodeId)
+                    .ToList();
+
+                foreach (var kvp in nodeLinks)
+                {
+                    DrawLink(kvp.Key, kvp.Value);
+                }
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Topology] Showing {nodeLinks.Count} links for node {nodeId:X8}");
+            }
+        }
+
+        /// <summary>
+        /// Hide links for a specific node (per-node toggle).
+        /// Only hides links if neither endpoint has per-node enabled and global is off.
+        /// </summary>
+        /// <param name="nodeId">Node ID to hide links for.</param>
+        public void HideLinksForNode(uint nodeId)
+        {
+            lock (_lock)
+            {
+                _perNodeEnabled.Remove(nodeId);
+
+                // Find all links involving this node
+                var nodeLinks = _activeLinks
+                    .Where(kvp => kvp.Value.NodeIdA == nodeId || kvp.Value.NodeIdB == nodeId)
+                    .ToList();
+
+                foreach (var kvp in nodeLinks)
+                {
+                    var link = kvp.Value;
+                    var otherNodeId = link.NodeIdA == nodeId ? link.NodeIdB : link.NodeIdA;
+
+                    // Only hide if neither global nor other endpoint's per-node is enabled
+                    if (!_overlayVisible && !_perNodeEnabled.Contains(otherNodeId))
+                    {
+                        _overlayService.RemoveTopologyLink(kvp.Key);
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Topology] Hide request for node {nodeId:X8} (global={_overlayVisible})");
+            }
+        }
+
+        /// <summary>
+        /// Check if per-node links are enabled for a specific node.
+        /// </summary>
+        public bool IsNodeLinksEnabled(uint nodeId)
+        {
+            lock (_lock)
+            {
+                return _perNodeEnabled.Contains(nodeId);
+            }
+        }
+
         private void DrawLink(string linkUid, NeighborLink link)
         {
             var nodeA = _getNodeState(link.NodeIdA);

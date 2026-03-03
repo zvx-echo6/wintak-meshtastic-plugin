@@ -222,7 +222,26 @@
                 <!-- Neighbors Section -->
                 <GroupBox Header="Neighbors" Visibility="{Binding HasNeighbors, Converter={StaticResource BoolToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="{Binding NeighborCountDisplay}" Style="{StaticResource LabelStyle}" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding NeighborCountDisplay}" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="{Binding ShowLinksButtonText}" Width="80"
+                                    Click="OnToggleShowLinks"
+                                    ToolTip="Show/hide topology links for this node on the map">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LinksVisible}" Value="True">
+                                                <Setter Property="Background" Value="#007ACC"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </Grid>
                         <ItemsControl ItemsSource="{Binding Neighbors}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

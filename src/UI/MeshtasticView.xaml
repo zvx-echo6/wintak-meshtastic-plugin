@@ -114,6 +114,43 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Toggle Button Style (highlighted when active) -->
+        <Style x:Key="ToggleButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="2"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#505050"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#606060"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Active">
+                                <Setter Property="Background" Value="#007ACC"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#0094FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Bool to Tag converter for toggle button state -->
+        <local:BoolToTagConverter x:Key="BoolToTagConverter"/>
     </UserControl.Resources>
 
     <Grid Margin="8">
@@ -232,6 +269,11 @@
 
         <!-- Bottom Toolbar -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="Topology" Width="70" Margin="0,0,8,0"
+                    Command="{Binding ToggleTopologyCommand}"
+                    Tag="{Binding TopologyEnabled, Converter={StaticResource BoolToTagConverter}}"
+                    Style="{StaticResource ToggleButtonStyle}"
+                    ToolTip="Toggle global topology overlay (mesh link lines)"/>
             <Button Content="Settings" Width="70" Margin="0,0,8,0"
                     Command="{Binding OpenSettingsCommand}"
                     ToolTip="Open plugin settings"/>

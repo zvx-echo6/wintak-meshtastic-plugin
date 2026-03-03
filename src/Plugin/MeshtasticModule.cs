@@ -463,6 +463,31 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
+        /// Show topology links for a specific node (per-node toggle).
+        /// Works independently of the global topology overlay setting.
+        /// </summary>
+        public void ShowLinksForNode(uint nodeId)
+        {
+            _topologyOverlayManager?.ShowLinksForNode(nodeId);
+        }
+
+        /// <summary>
+        /// Hide topology links for a specific node (per-node toggle).
+        /// </summary>
+        public void HideLinksForNode(uint nodeId)
+        {
+            _topologyOverlayManager?.HideLinksForNode(nodeId);
+        }
+
+        /// <summary>
+        /// Check if per-node links are enabled for a specific node.
+        /// </summary>
+        public bool IsNodeLinksEnabled(uint nodeId)
+        {
+            return _topologyOverlayManager?.IsNodeLinksEnabled(nodeId) ?? false;
+        }
+
+        /// <summary>
         /// Inject a GeoChat message from the mesh.
         /// </summary>
         public void InjectChatMessage(string senderUid, string senderCallsign, string message, string chatRoom)

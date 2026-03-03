@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using WinTakMeshtasticPlugin.Models;
+using WinTakMeshtasticPlugin.Plugin;
 
 namespace WinTakMeshtasticPlugin.UI
 {
@@ -13,15 +14,23 @@ namespace WinTakMeshtasticPlugin.UI
     /// </summary>
     public partial class TelemetryWindow : Window
     {
+        private readonly TelemetryWindowViewModel _viewModel;
+
         public TelemetryWindow(NodeState nodeState)
         {
             InitializeComponent();
-            DataContext = new TelemetryWindowViewModel(nodeState);
+            _viewModel = new TelemetryWindowViewModel(nodeState);
+            DataContext = _viewModel;
         }
 
         private void OnClose(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        private void OnToggleShowLinks(object sender, RoutedEventArgs e)
+        {
+            _viewModel.ToggleShowLinks();
         }
     }
 
@@ -31,10 +40,15 @@ namespace WinTakMeshtasticPlugin.UI
     public class TelemetryWindowViewModel : INotifyPropertyChanged
     {
         private readonly NodeState _nodeState;
+        private bool _linksVisible;
 
         public TelemetryWindowViewModel(NodeState nodeState)
         {
             _nodeState = nodeState ?? throw new ArgumentNullException(nameof(nodeState));
+
+            // Check if links are already visible for this node
+            var module = MeshtasticModule.Instance;
+            _linksVisible = module?.IsNodeLinksEnabled(_nodeState.NodeId) ?? false;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -112,6 +126,45 @@ namespace WinTakMeshtasticPlugin.UI
             .OrderByDescending(n => n.Snr)
             .Select(n => new NeighborViewModel(n))
             ?? Enumerable.Empty<NeighborViewModel>();
+
+        // Per-node link visibility
+        public bool LinksVisible
+        {
+            get => _linksVisible;
+            set
+            {
+                if (_linksVisible != value)
+                {
+                    _linksVisible = value;
+                    OnPropertyChanged(nameof(LinksVisible));
+                    OnPropertyChanged(nameof(ShowLinksButtonText));
+                }
+            }
+        }
+
+        public string ShowLinksButtonText => LinksVisible ? "Hide Links" : "Show Links";
+
+        public void ToggleShowLinks()
+        {
+            var module = MeshtasticModule.Instance;
+            if (module == null) return;
+
+            if (LinksVisible)
+            {
+                module.HideLinksForNode(_nodeState.NodeId);
+                LinksVisible = false;
+            }
+            else
+            {
+                module.ShowLinksForNode(_nodeState.NodeId);
+                LinksVisible = true;
+            }
+        }
+
+        private void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
 
         public string IaqDisplay
         {

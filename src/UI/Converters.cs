@@ -54,4 +54,25 @@ namespace WinTakMeshtasticPlugin.UI
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Converts a boolean to a Tag value for toggle button styling.
+    /// True returns "Active", False returns null.
+    /// </summary>
+    public class BoolToTagConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue && boolValue)
+            {
+                return "Active";
+            }
+            return null;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value?.ToString() == "Active";
+        }
+    }
 }

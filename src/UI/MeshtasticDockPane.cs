@@ -31,6 +31,7 @@ namespace WinTakMeshtasticPlugin.UI
         private ObservableCollection<NodeState> _nodes = new ObservableCollection<NodeState>();
         private NodeState _selectedNode;
         private System.Windows.Threading.DispatcherTimer _refreshTimer;
+        private bool _topologyEnabled;
 
         /// <summary>
         /// Observable collection of mesh nodes for UI binding.
@@ -51,6 +52,7 @@ namespace WinTakMeshtasticPlugin.UI
             ConnectCommand = new DelegateCommand(OnConnect, CanConnect);
             DisconnectCommand = new DelegateCommand(OnDisconnect, CanDisconnect);
             OpenSettingsCommand = new DelegateCommand(OnOpenSettings);
+            ToggleTopologyCommand = new DelegateCommand(OnToggleTopology);
 
             // Defer initialization until module is available
             Application.Current?.Dispatcher?.BeginInvoke(
@@ -65,6 +67,7 @@ namespace WinTakMeshtasticPlugin.UI
             var settings = PluginSettings.Load();
             Hostname = !string.IsNullOrWhiteSpace(settings.Hostname) ? settings.Hostname : "localhost";
             Port = settings.Port > 0 ? settings.Port : 4403;
+            TopologyEnabled = settings.TopologyOverlayEnabled;
 
             // Subscribe to module events if available
             var module = Module;
@@ -205,6 +208,15 @@ namespace WinTakMeshtasticPlugin.UI
             set => SetProperty(ref _selectedNode, value);
         }
 
+        /// <summary>
+        /// Whether the global topology overlay is enabled.
+        /// </summary>
+        public bool TopologyEnabled
+        {
+            get => _topologyEnabled;
+            set => SetProperty(ref _topologyEnabled, value);
+        }
+
         #endregion
 
         #region Commands
@@ -223,6 +235,11 @@ namespace WinTakMeshtasticPlugin.UI
         /// Command to open the settings dialog.
         /// </summary>
         public ICommand OpenSettingsCommand { get; }
+
+        /// <summary>
+        /// Command to toggle the global topology overlay.
+        /// </summary>
+        public ICommand ToggleTopologyCommand { get; }
 
         private bool CanConnect()
         {
@@ -289,7 +306,21 @@ namespace WinTakMeshtasticPlugin.UI
                 // Settings were saved - update UI with new values
                 Hostname = module.Settings.Hostname;
                 Port = module.Settings.Port;
+                TopologyEnabled = module.Settings.TopologyOverlayEnabled;
             }
+        }
+
+        private void OnToggleTopology()
+        {
+            var module = Module;
+            if (module == null) return;
+
+            // Toggle the state
+            TopologyEnabled = !TopologyEnabled;
+
+            // Update module and save to settings
+            module.SetTopologyOverlayEnabled(TopologyEnabled);
+            module.Settings.Save();
         }
 
         #endregion
