@@ -133,34 +133,37 @@ namespace WinTakMeshtasticPlugin.Topology
         }
 
         /// <summary>
-        /// Remove a topology link by making it immediately stale.
+        /// Remove a topology link by sending a CoT delete event.
+        /// Uses ATAK-style delete event (type t-x-d-d) which should work in WinTAK.
         /// </summary>
         /// <param name="uid">Unique identifier of the link to remove.</param>
         public void RemoveTopologyLink(string uid)
         {
             var now = DateTime.UtcNow;
+            var stale = now.AddMinutes(1);
+
+            // Try ATAK-style delete event (t-x-d-d = tasking-delete)
             string cotXml = string.Format(
                 CultureInfo.InvariantCulture,
                 @"<?xml version=""1.0"" encoding=""UTF-8""?>
-<event version=""2.0""
-       uid=""{0}""
-       type=""u-d-f""
-       time=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       start=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       stale=""{2:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       how=""m-g"">
-    <point lat=""0"" lon=""0"" hae=""0"" ce=""9999999"" le=""9999999""/>
-    <detail/>
+<event version=""2.0"" uid=""{0}-delete"" type=""t-x-d-d"" time=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}"" start=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}"" stale=""{2:yyyy-MM-ddTHH:mm:ss.fffZ}"" how=""h-e"">
+  <point lat=""0"" lon=""0"" hae=""9999999.0"" ce=""9999999.0"" le=""9999999.0""/>
+  <detail>
+    <link relation=""p-p"" uid=""{0}"" type=""u-d-f""/>
+  </detail>
 </event>",
                 System.Security.SecurityElement.Escape(uid),
                 now,
-                now.AddSeconds(-1)); // Stale time in the past = immediate removal
+                stale);
+
+            System.Diagnostics.Debug.WriteLine($"[TOPO] RemoveTopologyLink called for UID={uid}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] Delete CoT XML:\n{cotXml}");
 
             var xmlDoc = new XmlDocument();
             xmlDoc.LoadXml(cotXml);
             _sendCotAction(xmlDoc);
 
-            System.Diagnostics.Debug.WriteLine($"[Topology] Removed link {uid}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] Delete event sent for {uid}");
         }
 
         /// <summary>
