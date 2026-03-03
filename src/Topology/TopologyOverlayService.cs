@@ -58,23 +58,17 @@ namespace WinTakMeshtasticPlugin.Topology
             string cotXml = string.Format(
                 CultureInfo.InvariantCulture,
                 @"<?xml version=""1.0"" encoding=""UTF-8""?>
-<event version=""2.0""
-       uid=""{0}""
-       type=""u-d-f""
-       time=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       start=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       stale=""{2:yyyy-MM-ddTHH:mm:ss.fffZ}""
-       how=""m-g"">
-    <point lat=""{3}"" lon=""{4}"" hae=""0"" ce=""9999999"" le=""9999999""/>
-    <detail>
-        <link point=""{5},{6}""/>
-        <link point=""{7},{8}""/>
-        <strokeColor value=""{9}""/>
-        <strokeWeight value=""{10}""/>
-        <fillColor value=""0""/>
-        <contact callsign=""Mesh Link""/>
-        {11}
-    </detail>
+<event version=""2.0"" uid=""{0}"" type=""u-d-f"" time=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}"" start=""{1:yyyy-MM-ddTHH:mm:ss.fffZ}"" stale=""{2:yyyy-MM-ddTHH:mm:ss.fffZ}"" how=""h-e"">
+  <point lat=""{3:F6}"" lon=""{4:F6}"" hae=""9999999.0"" ce=""9999999.0"" le=""9999999.0""/>
+  <detail>
+    <link point=""{5:F6},{6:F6}""/>
+    <link point=""{7:F6},{8:F6}""/>
+    <strokeColor value=""{9}""/>
+    <strokeWeight value=""{10:F1}""/>
+    <contact callsign=""{11}""/>
+    <remarks/>
+    <labels_on value=""false""/>
+  </detail>
 </event>",
                 System.Security.SecurityElement.Escape(uid),
                 now,
@@ -85,7 +79,7 @@ namespace WinTakMeshtasticPlugin.Topology
                 lat2, lon2,
                 strokeColor,
                 strokeWeight,
-                remarksElement);
+                System.Security.SecurityElement.Escape(remarks ?? "Mesh Link"));
 
             var xmlDoc = new XmlDocument();
             xmlDoc.LoadXml(cotXml);
@@ -106,6 +100,8 @@ namespace WinTakMeshtasticPlugin.Topology
         /// </summary>
         /// <param name="nodeIdA">First node ID.</param>
         /// <param name="nodeIdB">Second node ID.</param>
+        /// <param name="nodeNameA">Display name of first node.</param>
+        /// <param name="nodeNameB">Display name of second node.</param>
         /// <param name="lat1">Latitude of first node.</param>
         /// <param name="lon1">Longitude of first node.</param>
         /// <param name="lat2">Latitude of second node.</param>
@@ -114,6 +110,7 @@ namespace WinTakMeshtasticPlugin.Topology
         /// <param name="staleMinutes">Minutes until link expires.</param>
         public void DrawTopologyLinkWithSnr(
             uint nodeIdA, uint nodeIdB,
+            string nodeNameA, string nodeNameB,
             double lat1, double lon1,
             double lat2, double lon2,
             double snrDb,
@@ -122,9 +119,15 @@ namespace WinTakMeshtasticPlugin.Topology
             string uid = TopologyLinkBuilder.BuildLinkUid(nodeIdA, nodeIdB);
             string color = TopologyLinkBuilder.GetSnrColor(snrDb);
             double weight = TopologyLinkBuilder.GetLineWeight(snrDb);
-            string remarks = TopologyLinkBuilder.FormatSnrRemarks(snrDb);
 
-            DrawTopologyLink(uid, lat1, lon1, lat2, lon2, color, weight, staleMinutes, remarks);
+            // Build descriptive callsign like "AIDA→SSL 3.0dB"
+            string callsign = string.Format(CultureInfo.InvariantCulture,
+                "{0}→{1} {2:F1}dB",
+                nodeNameA ?? nodeIdA.ToString("X4"),
+                nodeNameB ?? nodeIdB.ToString("X4"),
+                snrDb);
+
+            DrawTopologyLink(uid, lat1, lon1, lat2, lon2, color, weight, staleMinutes, callsign);
         }
 
         /// <summary>

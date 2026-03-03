@@ -299,6 +299,8 @@ namespace WinTakMeshtasticPlugin.Topology
 
             _overlayService.DrawTopologyLinkWithSnr(
                 link.NodeIdA, link.NodeIdB,
+                nodeA.ShortName ?? nodeA.DisplayName,
+                nodeB.ShortName ?? nodeB.DisplayName,
                 nodeA.Latitude.Value, nodeA.Longitude.Value,
                 nodeB.Latitude.Value, nodeB.Longitude.Value,
                 link.SnrDb);
