@@ -34,6 +34,30 @@
     </Reference>
   </ItemGroup>
 
+  <!-- WinTAK SDK assemblies needed for test runtime -->
+  <ItemGroup>
+    <Reference Include="WinTak.Framework">
+      <HintPath>$(WinTakDir)\WinTak.Framework.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WinTak.Common">
+      <HintPath>$(WinTakDir)\WinTak.Common.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Prism">
+      <HintPath>$(WinTakDir)\Prism.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Prism.Wpf">
+      <HintPath>$(WinTakDir)\Prism.Wpf.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Practices.ServiceLocation">
+      <HintPath>$(WinTakDir)\Microsoft.Practices.ServiceLocation.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\src\WinTakMeshtasticPlugin.csproj" />
   </ItemGroup>

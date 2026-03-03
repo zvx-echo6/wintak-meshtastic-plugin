@@ -29,6 +29,7 @@ namespace WinTakMeshtasticPlugin.UI
         private int _nodeCount = 0;
         private bool _isConnected = false;
         private ObservableCollection<NodeState> _nodes = new ObservableCollection<NodeState>();
+        private NodeState _selectedNode;
         private System.Windows.Threading.DispatcherTimer _refreshTimer;
 
         /// <summary>
@@ -194,6 +195,15 @@ namespace WinTakMeshtasticPlugin.UI
                     ((DelegateCommand)DisconnectCommand).RaiseCanExecuteChanged();
                 }
             }
+        }
+
+        /// <summary>
+        /// Currently selected node in the node list.
+        /// </summary>
+        public NodeState SelectedNode
+        {
+            get => _selectedNode;
+            set => SetProperty(ref _selectedNode, value);
         }
 
         #endregion

@@ -81,7 +81,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Register(new AtakPluginHandler());    // ATAK_PLUGIN (72)
 
             // Phase 2 handlers
-            // Register(new TelemetryHandler());     // TELEMETRY_APP (67)
+            Register(new TelemetryHandler());     // TELEMETRY_APP (67)
             // Register(new NeighborInfoHandler());  // NEIGHBORINFO_APP (71)
 
             // Phase 3 handlers
@@ -91,7 +91,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Register(new AlertHandler());         // ALERT_APP (226)
             // Register(new PaxcounterHandler());    // PAXCOUNTER_APP (69)
 
-            _logger?.LogInformation("Default handlers registered: POSITION_APP, NODEINFO_APP, TEXT_MESSAGE_APP");
+            _logger?.LogInformation("Default handlers registered: POSITION_APP, NODEINFO_APP, TEXT_MESSAGE_APP, TELEMETRY_APP");
         }
     }
 

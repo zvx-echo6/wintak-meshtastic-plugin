@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,13 +13,16 @@ using Prism.Modularity;
 using WinTakMeshtasticPlugin.Helpers;
 using WinTak.Common.CoT;
 using WinTak.Common.Services;
+using WinTak.CursorOnTarget.Graphics;
 using WinTak.CursorOnTarget.Services;
+using WinTak.Display;
 using WinTak.Framework;
 using WinTakMeshtasticPlugin.Connection;
 using WinTakMeshtasticPlugin.CoT;
 using WinTakMeshtasticPlugin.Handlers;
 using WinTakMeshtasticPlugin.Messaging;
 using WinTakMeshtasticPlugin.Models;
+using WinTakMeshtasticPlugin.UI;
 
 namespace WinTakMeshtasticPlugin.Plugin
 {
@@ -64,6 +68,8 @@ namespace WinTakMeshtasticPlugin.Plugin
         private ILocationService _locationService = null!;
         [Import]
         private ICommunicationService _communicationService = null!;
+        [Import]
+        private IMapViewController _mapViewController = null!;
 
         private IHandlerRegistry _handlerRegistry = null!;
         private ICotBuilder _cotBuilder = null!;
@@ -198,6 +204,33 @@ namespace WinTakMeshtasticPlugin.Plugin
                 // Subscribe to node state changes for logging
                 _nodeStateManager.NodeStateChanged += OnNodeStateChanged;
                 _nodeStateManager.NodeRemoved += OnNodeRemoved;
+
+                // Subscribe to map item clicks to show telemetry for mesh node markers
+                if (_mapViewController != null)
+                {
+                    _mapViewController.ItemClick += OnMapItemClick;
+                    try
+                    {
+                        var logPath = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                        System.IO.File.AppendAllText(logPath,
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Subscribed to IMapViewController.ItemClick\r\n");
+                    }
+                    catch { }
+                }
+                else
+                {
+                    try
+                    {
+                        var logPath = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                        System.IO.File.AppendAllText(logPath,
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - WARNING: _mapViewController is NULL - cannot subscribe to ItemClick\r\n");
+                    }
+                    catch { }
+                }
 
                 // Auto-connect if enabled in settings
                 if (_settings.AutoConnect && !string.IsNullOrWhiteSpace(_settings.Hostname))
@@ -439,6 +472,135 @@ namespace WinTakMeshtasticPlugin.Plugin
         }
 
         /// <summary>
+        /// Handle map item click events to show telemetry for mesh node markers.
+        /// </summary>
+        private void OnMapItemClick(object sender, MapMouseEventArgs e)
+        {
+            // DIAGNOSTIC: Log that the event fired
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - MAP CLICK EVENT FIRED\r\n");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - e.Item type: {e.Item?.GetType().FullName ?? "null"}\r\n");
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - e.MapItems count: {e.MapItems?.Count ?? 0}\r\n");
+                if (e.MapItems != null)
+                {
+                    foreach (var item in e.MapItems)
+                    {
+                        System.IO.File.AppendAllText(logPath,
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - MapItem: {item?.GetType().FullName ?? "null"}\r\n");
+                    }
+                }
+            }
+            catch { }
+
+            System.Diagnostics.Debug.WriteLine("[Meshtastic] MAP CLICK EVENT FIRED");
+            System.Diagnostics.Debug.WriteLine($"[Meshtastic] e.Item type: {e.Item?.GetType().FullName ?? "null"}");
+
+            // Check MapItems collection - e.Item may be null but MapItems contains the clicked marker
+            CotMapMarker marker = null;
+
+            // First try e.Item
+            if (e.Item is CotMapMarker directMarker)
+            {
+                marker = directMarker;
+            }
+            // Then check MapItems collection
+            else if (e.MapItems != null && e.MapItems.Count > 0)
+            {
+                marker = e.MapItems.OfType<CotMapMarker>().FirstOrDefault();
+            }
+
+            if (marker != null)
+            {
+                string uid = marker.Uid;
+
+                try
+                {
+                    var logPath = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "wintak", "plugins", "WinTakMeshtasticPlugin", "load.log");
+                    System.IO.File.AppendAllText(logPath,
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Marker UID: {uid ?? "null"}\r\n");
+                }
+                catch { }
+
+                // Check if this is a mesh node marker (UID format: MESH-{connectionId}-{nodeId:X8})
+                if (!string.IsNullOrEmpty(uid) && uid.StartsWith("MESH-"))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Meshtastic] Map marker clicked: {uid}");
+
+                    // Parse node ID from UID
+                    var nodeId = ParseNodeIdFromUid(uid);
+                    if (nodeId.HasValue)
+                    {
+                        // Find the node state
+                        var nodeState = _nodeStateManager.GetAll()
+                            .FirstOrDefault(n => n.NodeId == nodeId.Value);
+
+                        if (nodeState != null)
+                        {
+                            // Open telemetry window on UI thread
+                            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                            {
+                                ShowTelemetryWindow(nodeState);
+                            }));
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[Meshtastic] Node state not found for ID {nodeId.Value:X8}");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Parse the node ID from a mesh node CoT UID.
+        /// UID format: MESH-{connectionId}-{nodeId:X8}
+        /// </summary>
+        private uint? ParseNodeIdFromUid(string uid)
+        {
+            if (string.IsNullOrEmpty(uid))
+                return null;
+
+            // Split by dash: MESH-{connectionId}-{nodeId}
+            var parts = uid.Split('-');
+            if (parts.Length < 3)
+                return null;
+
+            // Node ID is the last part (hex format)
+            var nodeIdHex = parts[parts.Length - 1];
+            if (uint.TryParse(nodeIdHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint nodeId))
+            {
+                return nodeId;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Show the telemetry window for a mesh node.
+        /// </summary>
+        public void ShowTelemetryWindow(NodeState nodeState)
+        {
+            if (nodeState == null)
+                return;
+
+            var window = new TelemetryWindow(nodeState)
+            {
+                Owner = Application.Current?.MainWindow
+            };
+            window.Show();
+        }
+
+        /// <summary>
         /// Connect to a Meshtastic node.
         /// Called from UI or on plugin startup if auto-connect is enabled.
         /// </summary>
@@ -626,6 +788,11 @@ namespace WinTakMeshtasticPlugin.Plugin
             _locationService.PositionChanged -= OnOperatorPositionChanged;
             _nodeStateManager.NodeStateChanged -= OnNodeStateChanged;
             _nodeStateManager.NodeRemoved -= OnNodeRemoved;
+
+            if (_mapViewController != null)
+            {
+                _mapViewController.ItemClick -= OnMapItemClick;
+            }
 
             _cts?.Dispose();
 

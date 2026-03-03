@@ -193,9 +193,11 @@
             </Grid>
         </Border>
 
-        <!-- Node List (placeholder) -->
+        <!-- Node List -->
         <GroupBox Grid.Row="2" Header="Mesh Nodes">
-            <ListBox ItemsSource="{Binding Nodes}">
+            <ListBox ItemsSource="{Binding Nodes}"
+                     SelectedItem="{Binding SelectedNode}"
+                     MouseDoubleClick="OnNodeDoubleClick">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal" Margin="4">

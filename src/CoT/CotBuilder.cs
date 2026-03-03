@@ -41,8 +41,8 @@ namespace WinTakMeshtasticPlugin.CoT
             // Generate unique event UID from connection and node ID
             var uid = $"MESH-{nodeState.ConnectionId}-{nodeState.NodeId:X8}";
 
-            // Callsign: shortname or hex ID (SEC-07: XML-escape all mesh strings)
-            var callsign = XmlEscape(nodeState.DisplayName);
+            // Callsign: LongName preferred, then ShortName, then hex ID (SEC-07: XML-escape all mesh strings)
+            var callsign = XmlEscape(GetDisplayCallsign(nodeState));
 
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -233,33 +233,101 @@ namespace WinTakMeshtasticPlugin.CoT
         }
 
         /// <summary>
+        /// Get the display callsign for a node.
+        /// Priority: LongName → ShortName → hex ID
+        /// </summary>
+        private static string GetDisplayCallsign(NodeState nodeState)
+        {
+            if (!string.IsNullOrEmpty(nodeState.LongName))
+                return nodeState.LongName;
+            if (!string.IsNullOrEmpty(nodeState.ShortName))
+                return nodeState.ShortName;
+            return nodeState.NodeIdHex;
+        }
+
+        /// <summary>
         /// Build remarks text for a node (telemetry summary).
         /// Never includes PSK values (SEC-04).
+        /// Format:
+        /// Battery: 85% (4.1V) | Uptime: 2d 5h
+        /// ChUtil: 12% | AirTX: 4%
+        /// Temp: 72°F / 22°C | Hum: 45%
+        /// Pressure: 30.12 inHg
+        /// Hardware: heltec-v3 | FW: 2.3.1
         /// </summary>
         private static string BuildRemarksText(NodeState nodeState)
         {
-            var parts = new System.Collections.Generic.List<string>();
+            var lines = new System.Collections.Generic.List<string>();
 
-            if (!string.IsNullOrEmpty(nodeState.LongName))
-                parts.Add(nodeState.LongName);
-
+            // Line 1: Battery and uptime
+            var line1 = new System.Collections.Generic.List<string>();
             if (nodeState.DeviceTelemetry != null)
             {
                 var tel = nodeState.DeviceTelemetry;
                 if (tel.BatteryLevel.HasValue)
-                    parts.Add($"Batt: {tel.BatteryLevel}%");
-                if (tel.Voltage.HasValue)
-                    parts.Add($"{tel.Voltage:F1}V");
+                {
+                    var batteryStr = tel.Voltage.HasValue
+                        ? $"Battery: {tel.BatteryLevel}% ({tel.Voltage:F1}V)"
+                        : $"Battery: {tel.BatteryLevel}%";
+                    line1.Add(batteryStr);
+                }
+                if (tel.UptimeSeconds.HasValue)
+                {
+                    line1.Add($"Uptime: {tel.UptimeFormatted}");
+                }
             }
+            if (line1.Count > 0)
+                lines.Add(string.Join(" | ", line1));
 
+            // Line 2: Channel utilization
+            var line2 = new System.Collections.Generic.List<string>();
+            if (nodeState.DeviceTelemetry != null)
+            {
+                var tel = nodeState.DeviceTelemetry;
+                if (tel.ChannelUtilization.HasValue)
+                    line2.Add($"ChUtil: {tel.ChannelUtilization:F0}%");
+                if (tel.AirUtilTx.HasValue)
+                    line2.Add($"AirTX: {tel.AirUtilTx:F0}%");
+            }
+            if (line2.Count > 0)
+                lines.Add(string.Join(" | ", line2));
+
+            // Line 3: Temperature and humidity
+            var line3 = new System.Collections.Generic.List<string>();
             if (nodeState.EnvironmentTelemetry != null)
             {
                 var env = nodeState.EnvironmentTelemetry;
                 if (env.Temperature.HasValue)
-                    parts.Add($"Temp: {env.TemperatureFahrenheit:F1}°F");
+                    line3.Add($"Temp: {env.TemperatureFahrenheit:F0}°F / {env.Temperature:F0}°C");
+                if (env.RelativeHumidity.HasValue)
+                    line3.Add($"Hum: {env.RelativeHumidity:F0}%");
+            }
+            if (line3.Count > 0)
+                lines.Add(string.Join(" | ", line3));
+
+            // Line 4: Pressure
+            if (nodeState.EnvironmentTelemetry?.BarometricPressure.HasValue == true)
+            {
+                var env = nodeState.EnvironmentTelemetry;
+                lines.Add($"Pressure: {env.PressureInHg:F2} inHg");
             }
 
-            return string.Join(" | ", parts);
+            // Line 5: Hardware and firmware
+            var line5 = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrEmpty(nodeState.HardwareModel))
+                line5.Add($"Hardware: {nodeState.HardwareModel}");
+            if (!string.IsNullOrEmpty(nodeState.FirmwareVersion))
+                line5.Add($"FW: {nodeState.FirmwareVersion}");
+            if (line5.Count > 0)
+                lines.Add(string.Join(" | ", line5));
+
+            // If no telemetry at all, show longname
+            if (lines.Count == 0 && !string.IsNullOrEmpty(nodeState.LongName))
+            {
+                lines.Add(nodeState.LongName);
+            }
+
+            return string.Join("\n", lines);
         }
     }
 
