@@ -146,16 +146,24 @@ namespace WinTakMeshtasticPlugin.UI
 
         public void ToggleShowLinks()
         {
+            System.Diagnostics.Debug.WriteLine($"[TOPO] ShowLinks clicked for node {_nodeState.NodeId:X8}");
+
             var module = MeshtasticModule.Instance;
-            if (module == null) return;
+            if (module == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[TOPO] ERROR: Module is null!");
+                return;
+            }
 
             if (LinksVisible)
             {
+                System.Diagnostics.Debug.WriteLine($"[TOPO] Hiding links for node {_nodeState.NodeId:X8}");
                 module.HideLinksForNode(_nodeState.NodeId);
                 LinksVisible = false;
             }
             else
             {
+                System.Diagnostics.Debug.WriteLine($"[TOPO] Showing links for node {_nodeState.NodeId:X8}");
                 module.ShowLinksForNode(_nodeState.NodeId);
                 LinksVisible = true;
             }

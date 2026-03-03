@@ -409,6 +409,7 @@ namespace WinTakMeshtasticPlugin.Plugin
         /// </summary>
         public void SetTopologyOverlayEnabled(bool enabled)
         {
+            System.Diagnostics.Debug.WriteLine($"[TOPO] SetTopologyOverlayEnabled({enabled}) called");
             _settings.TopologyOverlayEnabled = enabled;
 
             if (_topologyOverlayManager != null)
@@ -418,13 +419,19 @@ namespace WinTakMeshtasticPlugin.Plugin
                 if (enabled)
                 {
                     var allNodes = _nodeStateManager.GetAll();
+                    System.Diagnostics.Debug.WriteLine($"[TOPO] Populating from {allNodes.Count()} existing nodes");
                     _topologyOverlayManager.PopulateFromExistingNodes(allNodes);
                 }
 
+                System.Diagnostics.Debug.WriteLine($"[TOPO] Setting OverlayVisible = {enabled}");
                 _topologyOverlayManager.OverlayVisible = enabled;
             }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[TOPO] ERROR: _topologyOverlayManager is null!");
+            }
 
-            System.Diagnostics.Debug.WriteLine($"[Meshtastic] Topology overlay {(enabled ? "enabled" : "disabled")}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] SetTopologyOverlayEnabled completed");
         }
 
         /// <summary>

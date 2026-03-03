@@ -85,12 +85,14 @@ namespace WinTakMeshtasticPlugin.Topology
             xmlDoc.LoadXml(cotXml);
 
             // Diagnostic logging for topology line injection
-            System.Diagnostics.Debug.WriteLine($"[Topology] INJECTING CoT for link {uid}");
-            System.Diagnostics.Debug.WriteLine($"[Topology] Point1: {lat1},{lon1} Point2: {lat2},{lon2}");
-            System.Diagnostics.Debug.WriteLine($"[Topology] Color: {strokeColor}, Weight: {strokeWeight}");
-            System.Diagnostics.Debug.WriteLine($"[Topology] CoT XML:\n{cotXml}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] InjectLink called for UID={uid}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] Point1: {lat1:F6},{lon1:F6} Point2: {lat2:F6},{lon2:F6}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] Color: {strokeColor}, Weight: {strokeWeight}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] CoT XML:\n{cotXml}");
+            System.Diagnostics.Debug.WriteLine($"[TOPO] Calling _sendCotAction...");
 
             _sendCotAction(xmlDoc);
+            System.Diagnostics.Debug.WriteLine($"[TOPO] _sendCotAction completed for {uid}");
 
             System.Diagnostics.Debug.WriteLine($"[Topology] Drew link {uid}");
         }

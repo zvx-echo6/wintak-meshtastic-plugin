@@ -346,15 +346,23 @@ namespace WinTakMeshtasticPlugin.UI
 
         private void OnToggleTopology()
         {
+            System.Diagnostics.Debug.WriteLine("[TOPO] ToggleTopology clicked");
+
             var module = Module;
-            if (module == null) return;
+            if (module == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[TOPO] ERROR: Module is null!");
+                return;
+            }
 
             // Toggle the state
             TopologyEnabled = !TopologyEnabled;
+            System.Diagnostics.Debug.WriteLine($"[TOPO] TopologyEnabled toggled to {TopologyEnabled}");
 
             // Update module and save to settings
             module.SetTopologyOverlayEnabled(TopologyEnabled);
             module.Settings.Save();
+            System.Diagnostics.Debug.WriteLine("[TOPO] SetTopologyOverlayEnabled called and settings saved");
         }
 
         #endregion

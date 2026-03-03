@@ -44,6 +44,7 @@ namespace WinTakMeshtasticPlugin.UI
             // If topology overlay setting changed, update map immediately
             if (_settings.TopologyOverlayEnabled != _originalTopologyOverlayEnabled)
             {
+                System.Diagnostics.Debug.WriteLine($"[TOPO] Settings Save: TopologyOverlayEnabled changed to {_settings.TopologyOverlayEnabled}");
                 MeshtasticModule.Instance?.SetTopologyOverlayEnabled(_settings.TopologyOverlayEnabled);
             }
 
