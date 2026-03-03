@@ -66,6 +66,16 @@ namespace WinTakMeshtasticPlugin.Models
         public double? Altitude { get; set; }
 
         /// <summary>
+        /// Ground speed in m/s from position packet.
+        /// </summary>
+        public double? GroundSpeed { get; set; }
+
+        /// <summary>
+        /// Ground track (heading) in degrees from position packet.
+        /// </summary>
+        public double? GroundTrack { get; set; }
+
+        /// <summary>
         /// Channels this node has been heard on (by index).
         /// </summary>
         public HashSet<int> ChannelsMembership { get; set; } = new();

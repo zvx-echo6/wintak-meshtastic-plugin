@@ -81,6 +81,18 @@ namespace WinTakMeshtasticPlugin.Handlers
                 nodeState.Altitude = position.Altitude;
             }
 
+            // Ground speed in m/s (optional field)
+            if (position.HasGroundSpeed && position.GroundSpeed > 0)
+            {
+                nodeState.GroundSpeed = position.GroundSpeed;
+            }
+
+            // Ground track in degrees (stored as 1/100 degrees in protobuf)
+            if (position.HasGroundTrack && position.GroundTrack > 0)
+            {
+                nodeState.GroundTrack = position.GroundTrack / 100.0;
+            }
+
             // Track channel membership
             if (packet.Channel >= 0 && packet.Channel < 8)
             {

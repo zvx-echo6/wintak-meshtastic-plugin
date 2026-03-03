@@ -79,11 +79,22 @@ namespace WinTakMeshtasticPlugin.CoT
             var teamColor = GetTeamColorForChannel(nodeState.PrimaryChannel);
             sb.AppendFormat("<__group name=\"{0}\" role=\"Team Member\"/>", teamColor);
 
-            // Track element (no course/speed for now)
-            sb.Append("<track course=\"0\" speed=\"0\"/>");
+            // Track element with speed/course (WinTAK displays this in tooltip)
+            // Speed is in m/s, course in degrees
+            var speed = nodeState.GroundSpeed ?? 0;
+            var course = nodeState.GroundTrack ?? 0;
+            sb.AppendFormat("<track speed=\"{0}\" course=\"{1}\"/>",
+                speed.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+                course.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
 
-            // Precisionlocation for GPS fix info
-            sb.Append("<precisionlocation altsrc=\"UNKNOWN\" geopointsrc=\"GPS\"/>");
+            // Precisionlocation for GPS source (WinTAK displays this in tooltip)
+            sb.Append("<precisionlocation geopointsrc=\"GPS\" altsrc=\"GPS\"/>");
+
+            // Status element with battery level (WinTAK displays this natively)
+            if (nodeState.DeviceTelemetry?.BatteryLevel.HasValue == true)
+            {
+                sb.AppendFormat("<status battery=\"{0}\"/>", nodeState.DeviceTelemetry.BatteryLevel.Value);
+            }
 
             // Remarks with node info (excluding PSK per SEC-04)
             var remarks = BuildRemarksText(nodeState, DisplayNameMode);
