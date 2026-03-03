@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
+using System.Windows.Media;
 using WinTakMeshtasticPlugin.Models;
 
 namespace WinTakMeshtasticPlugin.UI
@@ -98,6 +101,18 @@ namespace WinTakMeshtasticPlugin.UI
 
         public bool HasIaq => _nodeState.EnvironmentTelemetry?.Iaq.HasValue == true;
 
+        // Neighbors
+        public bool HasNeighbors => _nodeState.Neighbors?.Count > 0;
+
+        public string NeighborCountDisplay => _nodeState.Neighbors?.Count > 0
+            ? $"{_nodeState.Neighbors.Count} neighbor(s)"
+            : "No neighbors";
+
+        public IEnumerable<NeighborViewModel> Neighbors => _nodeState.Neighbors?
+            .OrderByDescending(n => n.Snr)
+            .Select(n => new NeighborViewModel(n))
+            ?? Enumerable.Empty<NeighborViewModel>();
+
         public string IaqDisplay
         {
             get
@@ -147,6 +162,61 @@ namespace WinTakMeshtasticPlugin.UI
             if (value is bool boolValue && boolValue)
                 return Visibility.Visible;
             return Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// ViewModel for displaying a neighbor in the telemetry window.
+    /// </summary>
+    public class NeighborViewModel
+    {
+        private readonly NeighborInfo _neighbor;
+
+        public NeighborViewModel(NeighborInfo neighbor)
+        {
+            _neighbor = neighbor ?? throw new ArgumentNullException(nameof(neighbor));
+        }
+
+        public string DisplayName => !string.IsNullOrEmpty(_neighbor.NodeName)
+            ? _neighbor.NodeName
+            : _neighbor.NodeIdHex;
+
+        public float Snr => _neighbor.Snr;
+
+        public string SnrDisplay => $"{_neighbor.Snr:F1} dB";
+    }
+
+    /// <summary>
+    /// Converter for SNR value to color.
+    /// Green >= -5 dB, Yellow >= -10 dB, Red otherwise.
+    /// </summary>
+    public class SnrToColorConverter : System.Windows.Data.IValueConverter
+    {
+        private static readonly SolidColorBrush GreenBrush = new SolidColorBrush(Color.FromRgb(0, 255, 0));
+        private static readonly SolidColorBrush YellowBrush = new SolidColorBrush(Color.FromRgb(255, 255, 0));
+        private static readonly SolidColorBrush RedBrush = new SolidColorBrush(Color.FromRgb(255, 80, 80));
+
+        static SnrToColorConverter()
+        {
+            GreenBrush.Freeze();
+            YellowBrush.Freeze();
+            RedBrush.Freeze();
+        }
+
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is float snr)
+            {
+                if (snr >= -5) return GreenBrush;
+                if (snr >= -10) return YellowBrush;
+                return RedBrush;
+            }
+            return RedBrush;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)

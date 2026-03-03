@@ -78,9 +78,9 @@ namespace WinTakMeshtasticPlugin.Models
         public int OutboundPliIntervalSeconds { get; set; } = 60;
 
         /// <summary>
-        /// Show topology overlay lines.
+        /// Show topology overlay lines. Default: OFF per requirements.
         /// </summary>
-        public bool TopologyOverlayEnabled { get; set; } = true;
+        public bool TopologyOverlayEnabled { get; set; } = false;
 
         /// <summary>
         /// Stale node cleanup timeout in hours.

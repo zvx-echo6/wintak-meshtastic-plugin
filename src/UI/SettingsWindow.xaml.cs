@@ -12,6 +12,7 @@ namespace WinTakMeshtasticPlugin.UI
         private readonly PluginSettings _settings;
         private readonly SettingsWindowViewModel _viewModel;
         private readonly DisplayNameMode _originalDisplayNameMode;
+        private readonly bool _originalTopologyOverlayEnabled;
 
         /// <summary>
         /// Create a settings window with the given settings instance.
@@ -23,6 +24,7 @@ namespace WinTakMeshtasticPlugin.UI
 
             _settings = settings;
             _originalDisplayNameMode = settings.DisplayNameMode;
+            _originalTopologyOverlayEnabled = settings.TopologyOverlayEnabled;
             _viewModel = new SettingsWindowViewModel(settings);
             DataContext = _viewModel;
         }
@@ -37,6 +39,12 @@ namespace WinTakMeshtasticPlugin.UI
             if (_settings.DisplayNameMode != _originalDisplayNameMode)
             {
                 MeshtasticModule.Instance?.SetDisplayNameMode(_settings.DisplayNameMode);
+            }
+
+            // If topology overlay setting changed, update map immediately
+            if (_settings.TopologyOverlayEnabled != _originalTopologyOverlayEnabled)
+            {
+                MeshtasticModule.Instance?.SetTopologyOverlayEnabled(_settings.TopologyOverlayEnabled);
             }
 
             DialogResult = true;

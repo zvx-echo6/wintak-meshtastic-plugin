@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Security;
 using System.Text;
 using System.Xml;
@@ -372,6 +373,23 @@ namespace WinTakMeshtasticPlugin.CoT
                 line5.Add($"FW: {nodeState.FirmwareVersion}");
             if (line5.Count > 0)
                 lines.Add(string.Join(" | ", line5));
+
+            // Line 6: Neighbors summary
+            if (nodeState.Neighbors != null && nodeState.Neighbors.Count > 0)
+            {
+                var neighborParts = new System.Collections.Generic.List<string>();
+                foreach (var neighbor in nodeState.Neighbors.Take(5)) // Show top 5 neighbors
+                {
+                    var name = !string.IsNullOrEmpty(neighbor.NodeName)
+                        ? neighbor.NodeName
+                        : neighbor.NodeIdHex;
+                    neighborParts.Add($"{name} ({neighbor.Snr:F0}dB)");
+                }
+                var neighborStr = string.Join(", ", neighborParts);
+                if (nodeState.Neighbors.Count > 5)
+                    neighborStr += $" +{nodeState.Neighbors.Count - 5} more";
+                lines.Add($"Neighbors: {neighborStr}");
+            }
 
             // If no telemetry at all, ensure we have at least node identity
             if (lines.Count == 0)

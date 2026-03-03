@@ -22,6 +22,7 @@ using WinTakMeshtasticPlugin.CoT;
 using WinTakMeshtasticPlugin.Handlers;
 using WinTakMeshtasticPlugin.Messaging;
 using WinTakMeshtasticPlugin.Models;
+using WinTakMeshtasticPlugin.Topology;
 using WinTakMeshtasticPlugin.UI;
 
 namespace WinTakMeshtasticPlugin.Plugin
@@ -82,6 +83,9 @@ namespace WinTakMeshtasticPlugin.Plugin
         private OutboundMessageService? _outboundMessageService;
         private CancellationTokenSource? _cts;
         private TextMessageHandler? _textMessageHandler;
+        private NeighborInfoHandler? _neighborInfoHandler;
+        private TopologyOverlayService? _topologyOverlayService;
+        private TopologyOverlayManager? _topologyOverlayManager;
 
         /// <summary>
         /// Current connection state for UI binding.
@@ -191,6 +195,16 @@ namespace WinTakMeshtasticPlugin.Plugin
                 {
                     _textMessageHandler.MessageReceived += OnTextMessageReceived;
                 }
+
+                // Get reference to NeighborInfoHandler for topology overlay
+                _neighborInfoHandler = _handlerRegistry.GetHandler(Meshtastic.Protobufs.PortNum.NeighborinfoApp) as NeighborInfoHandler;
+
+                // Initialize topology overlay
+                _topologyOverlayService = new TopologyOverlayService(xmlDoc => _cotMessageSender.Send(xmlDoc));
+                _topologyOverlayManager = new TopologyOverlayManager(
+                    _topologyOverlayService,
+                    nodeId => _nodeStateManager.GetAll().FirstOrDefault(n => n.NodeId == nodeId));
+                _topologyOverlayManager.OverlayVisible = _settings.TopologyOverlayEnabled;
 
                 // Subscribe to channel changes to persist settings
                 _channelManager.ChannelChanged += OnChannelChanged;
@@ -429,6 +443,23 @@ namespace WinTakMeshtasticPlugin.Plugin
             }
             _settings.DisplayNameMode = mode;
             ReInjectAllNodes();
+        }
+
+        /// <summary>
+        /// Enable or disable the topology overlay.
+        /// When enabled, draws all known neighbor links immediately.
+        /// When disabled, removes all topology lines from the map immediately.
+        /// </summary>
+        public void SetTopologyOverlayEnabled(bool enabled)
+        {
+            _settings.TopologyOverlayEnabled = enabled;
+
+            if (_topologyOverlayManager != null)
+            {
+                _topologyOverlayManager.OverlayVisible = enabled;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[Meshtastic] Topology overlay {(enabled ? "enabled" : "disabled")}");
         }
 
         /// <summary>
@@ -912,6 +943,22 @@ namespace WinTakMeshtasticPlugin.Plugin
                     var xmlDoc = new XmlDocument();
                     xmlDoc.LoadXml(result.CotXml);
                     _cotMessageSender.Send(xmlDoc);
+                }
+
+                // Update topology overlay when neighbor info is received
+                if (decoded.Portnum == Meshtastic.Protobufs.PortNum.NeighborinfoApp &&
+                    result?.UpdatesNodeState == true &&
+                    _settings.TopologyOverlayEnabled &&
+                    _topologyOverlayManager != null)
+                {
+                    // Get the node state that was just updated
+                    var nodeState = _nodeStateManager.Get(e.ConnectionId, e.Packet.From);
+                    if (nodeState?.Neighbors != null && nodeState.Neighbors.Count > 0)
+                    {
+                        var neighborEntries = nodeState.Neighbors
+                            .Select(n => new NeighborEntry { NodeId = n.NodeId, Snr = n.Snr });
+                        _topologyOverlayManager.UpdateFromNeighborInfo(e.Packet.From, neighborEntries);
+                    }
                 }
             }
             catch (Exception ex)

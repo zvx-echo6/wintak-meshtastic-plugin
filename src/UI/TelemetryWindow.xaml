@@ -15,6 +15,7 @@
     <Window.Resources>
         <!-- Converters -->
         <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <local:SnrToColorConverter x:Key="SnrToColorConverter"/>
 
         <!-- Dark theme colors -->
         <SolidColorBrush x:Key="BackgroundBrush" Color="#2D2D30"/>
@@ -216,6 +217,29 @@
                         <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding IaqDisplay}" Style="{StaticResource ValueStyle}"
                                    Visibility="{Binding HasIaq, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     </Grid>
+                </GroupBox>
+
+                <!-- Neighbors Section -->
+                <GroupBox Header="Neighbors" Visibility="{Binding HasNeighbors, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding NeighborCountDisplay}" Style="{StaticResource LabelStyle}" Margin="0,0,0,8"/>
+                        <ItemsControl ItemsSource="{Binding Neighbors}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Style="{StaticResource ValueStyle}" Margin="0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding SnrDisplay}"
+                                                   Foreground="{Binding Snr, Converter={StaticResource SnrToColorConverter}}"
+                                                   Style="{StaticResource ValueStyle}" Margin="0" FontWeight="Bold"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </GroupBox>
             </StackPanel>
         </ScrollViewer>
