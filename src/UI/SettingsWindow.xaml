@@ -34,6 +34,11 @@
             <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
         </Style>
 
+        <!-- RadioButton Style -->
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}"/>
+        </Style>
+
         <!-- Button Style -->
         <Style TargetType="Button">
             <Setter Property="Background" Value="#3E3E42"/>
@@ -151,14 +156,19 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- Placeholder for future settings -->
-                <!--
-                <GroupBox Header="Channel Settings">
+                <!-- Display Settings -->
+                <GroupBox Header="Display">
+                    <StackPanel>
+                        <TextBlock Text="Map Callsign:" Margin="0,0,0,8"/>
+                        <RadioButton Content="Short Name (HnRp)"
+                                     IsChecked="{Binding UseShortName}"
+                                     GroupName="DisplayNameMode"
+                                     Margin="0,0,0,4"/>
+                        <RadioButton Content="Long Name (Hansen Repeater)"
+                                     IsChecked="{Binding UseLongName}"
+                                     GroupName="DisplayNameMode"/>
+                    </StackPanel>
                 </GroupBox>
-
-                <GroupBox Header="Display Settings">
-                </GroupBox>
-                -->
             </StackPanel>
         </ScrollViewer>
 

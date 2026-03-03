@@ -18,6 +18,13 @@ namespace WinTakMeshtasticPlugin.CoT
         public static readonly TimeSpan DefaultStaleTime = TimeSpan.FromMinutes(30);
 
         /// <summary>
+        /// Display name mode for map callsigns.
+        /// ShortName = Use short name as callsign (default).
+        /// LongName = Use long name as callsign.
+        /// </summary>
+        public Models.DisplayNameMode DisplayNameMode { get; set; } = Models.DisplayNameMode.ShortName;
+
+        /// <summary>
         /// Build a Position Location Information (PLI) CoT event for a mesh node.
         /// </summary>
         /// <param name="nodeState">The node state with position and identity info.</param>
@@ -41,8 +48,8 @@ namespace WinTakMeshtasticPlugin.CoT
             // Generate unique event UID from connection and node ID
             var uid = $"MESH-{nodeState.ConnectionId}-{nodeState.NodeId:X8}";
 
-            // Callsign: LongName preferred, then ShortName, then hex ID (SEC-07: XML-escape all mesh strings)
-            var callsign = XmlEscape(GetDisplayCallsign(nodeState));
+            // Callsign based on DisplayNameMode (SEC-07: XML-escape all mesh strings)
+            var callsign = XmlEscape(GetDisplayCallsign(nodeState, DisplayNameMode));
 
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -79,7 +86,7 @@ namespace WinTakMeshtasticPlugin.CoT
             sb.Append("<precisionlocation altsrc=\"UNKNOWN\" geopointsrc=\"GPS\"/>");
 
             // Remarks with node info (excluding PSK per SEC-04)
-            var remarks = BuildRemarksText(nodeState);
+            var remarks = BuildRemarksText(nodeState, DisplayNameMode);
             if (!string.IsNullOrEmpty(remarks))
             {
                 sb.AppendFormat("<remarks>{0}</remarks>", XmlEscape(remarks));
@@ -233,31 +240,65 @@ namespace WinTakMeshtasticPlugin.CoT
         }
 
         /// <summary>
-        /// Get the display callsign for a node.
-        /// Priority: LongName → ShortName → hex ID
+        /// Get the display callsign for a node based on display mode.
+        /// ShortName mode: ShortName → LongName → hex ID
+        /// LongName mode: LongName → ShortName → hex ID
         /// </summary>
-        private static string GetDisplayCallsign(NodeState nodeState)
+        private static string GetDisplayCallsign(NodeState nodeState, Models.DisplayNameMode mode)
         {
-            if (!string.IsNullOrEmpty(nodeState.LongName))
-                return nodeState.LongName;
-            if (!string.IsNullOrEmpty(nodeState.ShortName))
-                return nodeState.ShortName;
+            if (mode == Models.DisplayNameMode.LongName)
+            {
+                // LongName mode: prefer LongName
+                if (!string.IsNullOrEmpty(nodeState.LongName))
+                    return nodeState.LongName;
+                if (!string.IsNullOrEmpty(nodeState.ShortName))
+                    return nodeState.ShortName;
+            }
+            else
+            {
+                // ShortName mode: prefer ShortName
+                if (!string.IsNullOrEmpty(nodeState.ShortName))
+                    return nodeState.ShortName;
+                if (!string.IsNullOrEmpty(nodeState.LongName))
+                    return nodeState.LongName;
+            }
             return nodeState.NodeIdHex;
         }
 
         /// <summary>
         /// Build remarks text for a node (telemetry summary).
         /// Never includes PSK values (SEC-04).
-        /// Format:
+        /// Format (ShortName mode - callsign is ShortName):
+        /// LongName (ShortName)
         /// Battery: 85% (4.1V) | Uptime: 2d 5h
-        /// ChUtil: 12% | AirTX: 4%
-        /// Temp: 72°F / 22°C | Hum: 45%
-        /// Pressure: 30.12 inHg
-        /// Hardware: heltec-v3 | FW: 2.3.1
+        /// ...
+        /// Format (LongName mode - callsign is LongName):
+        /// ShortName: HnRp
+        /// Battery: 85% (4.1V) | Uptime: 2d 5h
+        /// ...
         /// </summary>
-        private static string BuildRemarksText(NodeState nodeState)
+        private static string BuildRemarksText(NodeState nodeState, Models.DisplayNameMode mode)
         {
             var lines = new System.Collections.Generic.List<string>();
+
+            // Line 0: Complementary name info (the name NOT shown in callsign)
+            if (mode == Models.DisplayNameMode.ShortName)
+            {
+                // Callsign is ShortName, so show "LongName (ShortName)" in remarks
+                if (!string.IsNullOrEmpty(nodeState.LongName))
+                {
+                    var shortPart = !string.IsNullOrEmpty(nodeState.ShortName) ? $" ({nodeState.ShortName})" : "";
+                    lines.Add($"{nodeState.LongName}{shortPart}");
+                }
+            }
+            else
+            {
+                // Callsign is LongName, so show "ShortName: HnRp" in remarks
+                if (!string.IsNullOrEmpty(nodeState.ShortName))
+                {
+                    lines.Add($"ShortName: {nodeState.ShortName}");
+                }
+            }
 
             // Line 1: Battery and uptime
             var line1 = new System.Collections.Generic.List<string>();
@@ -321,10 +362,14 @@ namespace WinTakMeshtasticPlugin.CoT
             if (line5.Count > 0)
                 lines.Add(string.Join(" | ", line5));
 
-            // If no telemetry at all, show longname
-            if (lines.Count == 0 && !string.IsNullOrEmpty(nodeState.LongName))
+            // If no telemetry at all, ensure we have at least node identity
+            if (lines.Count == 0)
             {
-                lines.Add(nodeState.LongName);
+                // Show whatever name info we have
+                if (!string.IsNullOrEmpty(nodeState.LongName))
+                    lines.Add(nodeState.LongName);
+                else if (!string.IsNullOrEmpty(nodeState.ShortName))
+                    lines.Add(nodeState.ShortName);
             }
 
             return string.Join("\n", lines);

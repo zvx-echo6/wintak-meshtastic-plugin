@@ -2,10 +2,27 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using WinTakMeshtasticPlugin.Helpers;
 
 namespace WinTakMeshtasticPlugin.Models
 {
+    /// <summary>
+    /// Display name mode for map callsigns.
+    /// </summary>
+    public enum DisplayNameMode
+    {
+        /// <summary>
+        /// Use ShortName as callsign (e.g., "HnRp"). Default.
+        /// </summary>
+        ShortName,
+
+        /// <summary>
+        /// Use LongName as callsign (e.g., "Hansen Repeater").
+        /// </summary>
+        LongName
+    }
+
     /// <summary>
     /// Plugin settings that persist across WinTAK restarts.
     /// Stored in %appdata%\wintak\plugins\WinTakMeshtasticPlugin\settings.json
@@ -69,6 +86,14 @@ namespace WinTakMeshtasticPlugin.Models
         /// Stale node cleanup timeout in hours.
         /// </summary>
         public int StaleNodeTimeoutHours { get; set; } = 24;
+
+        /// <summary>
+        /// Display name mode for map callsigns.
+        /// ShortName = Use short name as callsign (default).
+        /// LongName = Use long name as callsign.
+        /// </summary>
+        [JsonConverter(typeof(StringEnumConverter))]
+        public DisplayNameMode DisplayNameMode { get; set; } = DisplayNameMode.ShortName;
 
         /// <summary>
         /// Load settings from disk.

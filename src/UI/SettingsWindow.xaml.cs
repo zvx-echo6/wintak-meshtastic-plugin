@@ -1,5 +1,6 @@
 using System.Windows;
 using WinTakMeshtasticPlugin.Models;
+using WinTakMeshtasticPlugin.Plugin;
 
 namespace WinTakMeshtasticPlugin.UI
 {
@@ -10,6 +11,7 @@ namespace WinTakMeshtasticPlugin.UI
     {
         private readonly PluginSettings _settings;
         private readonly SettingsWindowViewModel _viewModel;
+        private readonly DisplayNameMode _originalDisplayNameMode;
 
         /// <summary>
         /// Create a settings window with the given settings instance.
@@ -20,6 +22,7 @@ namespace WinTakMeshtasticPlugin.UI
             InitializeComponent();
 
             _settings = settings;
+            _originalDisplayNameMode = settings.DisplayNameMode;
             _viewModel = new SettingsWindowViewModel(settings);
             DataContext = _viewModel;
         }
@@ -29,6 +32,12 @@ namespace WinTakMeshtasticPlugin.UI
             // Validate and save settings
             _settings.Validate();
             _settings.Save();
+
+            // If display name mode changed, update CoT markers
+            if (_settings.DisplayNameMode != _originalDisplayNameMode)
+            {
+                MeshtasticModule.Instance?.SetDisplayNameMode(_settings.DisplayNameMode);
+            }
 
             DialogResult = true;
             Close();
@@ -48,6 +57,7 @@ namespace WinTakMeshtasticPlugin.UI
             _settings.TopologyOverlayEnabled = reloaded.TopologyOverlayEnabled;
             _settings.OutboundPliEnabled = reloaded.OutboundPliEnabled;
             _settings.OutboundPliIntervalSeconds = reloaded.OutboundPliIntervalSeconds;
+            _settings.DisplayNameMode = reloaded.DisplayNameMode;
 
             DialogResult = false;
             Close();
@@ -100,6 +110,26 @@ namespace WinTakMeshtasticPlugin.UI
         {
             get => _settings.TopologyOverlayEnabled;
             set => _settings.TopologyOverlayEnabled = value;
+        }
+
+        public bool UseShortName
+        {
+            get => _settings.DisplayNameMode == DisplayNameMode.ShortName;
+            set
+            {
+                if (value)
+                    _settings.DisplayNameMode = DisplayNameMode.ShortName;
+            }
+        }
+
+        public bool UseLongName
+        {
+            get => _settings.DisplayNameMode == DisplayNameMode.LongName;
+            set
+            {
+                if (value)
+                    _settings.DisplayNameMode = DisplayNameMode.LongName;
+            }
         }
     }
 }

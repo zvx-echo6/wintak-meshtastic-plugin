@@ -347,6 +347,89 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
             remarksNode!.InnerText.Should().Be("Hello World");
         }
 
+        [Fact]
+        public void BuildNodePli_ShortNameMode_UsesShortNameAsCallsign()
+        {
+            // Arrange
+            var builder = new CotBuilder { DisplayNameMode = DisplayNameMode.ShortName };
+            var node = CreateTestNode();
+            node.ShortName = "HnRp";
+            node.LongName = "Hansen Repeater";
+
+            // Act
+            var cotXml = builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert
+            var contactNode = doc.SelectSingleNode("/event/detail/contact");
+            contactNode!.Attributes!["callsign"]!.Value.Should().Be("HnRp");
+
+            var remarksNode = doc.SelectSingleNode("/event/detail/remarks");
+            remarksNode!.InnerText.Should().Contain("Hansen Repeater");
+            remarksNode.InnerText.Should().Contain("(HnRp)");
+        }
+
+        [Fact]
+        public void BuildNodePli_LongNameMode_UsesLongNameAsCallsign()
+        {
+            // Arrange
+            var builder = new CotBuilder { DisplayNameMode = DisplayNameMode.LongName };
+            var node = CreateTestNode();
+            node.ShortName = "HnRp";
+            node.LongName = "Hansen Repeater";
+
+            // Act
+            var cotXml = builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert
+            var contactNode = doc.SelectSingleNode("/event/detail/contact");
+            contactNode!.Attributes!["callsign"]!.Value.Should().Be("Hansen Repeater");
+
+            var remarksNode = doc.SelectSingleNode("/event/detail/remarks");
+            remarksNode!.InnerText.Should().Contain("ShortName: HnRp");
+        }
+
+        [Fact]
+        public void BuildNodePli_ShortNameMode_FallsBackToLongName()
+        {
+            // Arrange - no ShortName set
+            var builder = new CotBuilder { DisplayNameMode = DisplayNameMode.ShortName };
+            var node = CreateTestNode();
+            node.ShortName = null;
+            node.LongName = "Hansen Repeater";
+
+            // Act
+            var cotXml = builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert - should fall back to LongName
+            var contactNode = doc.SelectSingleNode("/event/detail/contact");
+            contactNode!.Attributes!["callsign"]!.Value.Should().Be("Hansen Repeater");
+        }
+
+        [Fact]
+        public void BuildNodePli_LongNameMode_FallsBackToShortName()
+        {
+            // Arrange - no LongName set
+            var builder = new CotBuilder { DisplayNameMode = DisplayNameMode.LongName };
+            var node = CreateTestNode();
+            node.ShortName = "HnRp";
+            node.LongName = null;
+
+            // Act
+            var cotXml = builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert - should fall back to ShortName
+            var contactNode = doc.SelectSingleNode("/event/detail/contact");
+            contactNode!.Attributes!["callsign"]!.Value.Should().Be("HnRp");
+        }
+
         private static NodeState CreateTestNode()
         {
             var node = new NodeState

@@ -141,7 +141,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Initialize components (was in constructor before)
             _settings = PluginSettings.Load();
             _handlerRegistry = new HandlerRegistry();
-            _cotBuilder = new CotBuilder();
+            _cotBuilder = new CotBuilder { DisplayNameMode = _settings.DisplayNameMode };
             _nodeStateManager = new NodeStateManager();
             _channelManager = new ChannelManager();
             _channelHandler = new ChannelHandler(_channelManager);
@@ -397,6 +397,38 @@ namespace WinTakMeshtasticPlugin.Plugin
             {
                 System.Diagnostics.Debug.WriteLine($"[Meshtastic] Failed to inject position: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Re-inject CoT for all tracked nodes.
+        /// Called when display settings change to update map markers.
+        /// </summary>
+        public void ReInjectAllNodes()
+        {
+            var nodesWithPosition = _nodeStateManager.GetAll()
+                .Where(n => n.Latitude.HasValue && n.Longitude.HasValue);
+
+            int count = 0;
+            foreach (var nodeState in nodesWithPosition)
+            {
+                InjectNodePosition(nodeState);
+                count++;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[Meshtastic] Re-injected CoT for {count} nodes");
+        }
+
+        /// <summary>
+        /// Update the display name mode and re-inject all node markers.
+        /// </summary>
+        public void SetDisplayNameMode(DisplayNameMode mode)
+        {
+            if (_cotBuilder is CotBuilder builder)
+            {
+                builder.DisplayNameMode = mode;
+            }
+            _settings.DisplayNameMode = mode;
+            ReInjectAllNodes();
         }
 
         /// <summary>
