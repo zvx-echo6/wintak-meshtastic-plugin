@@ -413,6 +413,14 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             if (_topologyOverlayManager != null)
             {
+                // When enabling, first populate links from any existing node state
+                // This catches neighbor info that arrived before the overlay was enabled
+                if (enabled)
+                {
+                    var allNodes = _nodeStateManager.GetAll();
+                    _topologyOverlayManager.PopulateFromExistingNodes(allNodes);
+                }
+
                 _topologyOverlayManager.OverlayVisible = enabled;
             }
 
@@ -886,9 +894,9 @@ namespace WinTakMeshtasticPlugin.Plugin
                 }
 
                 // Update topology overlay when neighbor info is received
+                // ALWAYS track neighbor relationships - the overlay manager controls visibility
                 if (decoded.Portnum == Meshtastic.Protobufs.PortNum.NeighborinfoApp &&
                     result?.UpdatesNodeState == true &&
-                    _settings.TopologyOverlayEnabled &&
                     _topologyOverlayManager != null)
                 {
                     // Get the node state that was just updated
@@ -898,6 +906,8 @@ namespace WinTakMeshtasticPlugin.Plugin
                         var neighborEntries = nodeState.Neighbors
                             .Select(n => new NeighborEntry { NodeId = n.NodeId, Snr = n.Snr });
                         _topologyOverlayManager.UpdateFromNeighborInfo(e.Packet.From, neighborEntries);
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[Topology] Updated {neighborEntries.Count()} neighbor links for {nodeState.DisplayName}");
                     }
                 }
             }

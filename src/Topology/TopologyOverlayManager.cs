@@ -49,6 +49,9 @@ namespace WinTakMeshtasticPlugin.Topology
             get => _overlayVisible;
             set
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Topology] OverlayVisible changing from {_overlayVisible} to {value}, activeLinks={_activeLinks.Count}");
+
                 if (_overlayVisible != value)
                 {
                     _overlayVisible = value;
@@ -275,14 +278,24 @@ namespace WinTakMeshtasticPlugin.Topology
             var nodeA = _getNodeState(link.NodeIdA);
             var nodeB = _getNodeState(link.NodeIdB);
 
+            System.Diagnostics.Debug.WriteLine(
+                $"[Topology] DrawLink {linkUid}: nodeA={link.NodeIdA:X8} nodeB={link.NodeIdB:X8}");
+
             // Can only draw if both nodes have positions
             if (nodeA?.Latitude == null || nodeA?.Longitude == null ||
                 nodeB?.Latitude == null || nodeB?.Longitude == null)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[Topology] Cannot draw link {linkUid}: missing position data");
+                    $"[Topology] Cannot draw link {linkUid}: missing position data " +
+                    $"(A: lat={nodeA?.Latitude}, lon={nodeA?.Longitude}, " +
+                    $"B: lat={nodeB?.Latitude}, lon={nodeB?.Longitude})");
                 return;
             }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Topology] Drawing link with positions: " +
+                $"({nodeA.Latitude.Value:F6}, {nodeA.Longitude.Value:F6}) -> " +
+                $"({nodeB.Latitude.Value:F6}, {nodeB.Longitude.Value:F6}), SNR={link.SnrDb:F1}");
 
             _overlayService.DrawTopologyLinkWithSnr(
                 link.NodeIdA, link.NodeIdB,
@@ -291,10 +304,52 @@ namespace WinTakMeshtasticPlugin.Topology
                 link.SnrDb);
         }
 
+        /// <summary>
+        /// Populate links from existing node state.
+        /// Call this after enabling overlay to catch any neighbor info received while disabled.
+        /// </summary>
+        /// <param name="allNodes">All known nodes with their neighbor data.</param>
+        public void PopulateFromExistingNodes(IEnumerable<NodeState> allNodes)
+        {
+            if (allNodes == null) return;
+
+            int addedCount = 0;
+            lock (_lock)
+            {
+                foreach (var node in allNodes)
+                {
+                    if (node.Neighbors == null || node.Neighbors.Count == 0) continue;
+
+                    foreach (var neighbor in node.Neighbors)
+                    {
+                        string linkUid = TopologyLinkBuilder.BuildLinkUid(node.NodeId, neighbor.NodeId);
+
+                        if (!_activeLinks.ContainsKey(linkUid))
+                        {
+                            _activeLinks[linkUid] = new NeighborLink
+                            {
+                                NodeIdA = Math.Min(node.NodeId, neighbor.NodeId),
+                                NodeIdB = Math.Max(node.NodeId, neighbor.NodeId),
+                                SnrDb = neighbor.Snr,
+                                LastUpdated = neighbor.LastUpdate
+                            };
+                            addedCount++;
+                        }
+                    }
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Topology] PopulateFromExistingNodes: added {addedCount} links, total={_activeLinks.Count}");
+        }
+
         private void RedrawAllLinks()
         {
             lock (_lock)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Topology] RedrawAllLinks called with {_activeLinks.Count} links");
+
                 foreach (var kvp in _activeLinks)
                 {
                     DrawLink(kvp.Key, kvp.Value);
