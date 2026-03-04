@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Security;
 using System.Text;
@@ -46,11 +47,18 @@ namespace WinTakMeshtasticPlugin.CoT
             // Get CoT type based on device role (per CLAUDE.md)
             var cotType = GetCotTypeForRole(nodeState.Role);
 
-            // Generate unique event UID from connection and node ID
-            var uid = $"MESH-{nodeState.ConnectionId}-{nodeState.NodeId:X8}";
+            // Generate stable event UID from node ID only (no connection ID)
+            // This prevents duplicate markers when reconnecting to the same mesh
+            var uid = $"MESH-{nodeState.NodeId:X8}";
 
             // Callsign based on DisplayNameMode (SEC-07: XML-escape all mesh strings)
             var callsign = XmlEscape(GetDisplayCallsign(nodeState, DisplayNameMode));
+
+            // Get icon path for this role with alert level (default: no alert)
+            var iconPath = GetIconPathForRole(nodeState.Role, AlertLevel.None);
+
+            // Single-line log for role/type/icon mapping diagnostics
+            LogToFile($"[TypeMap] NodeId={nodeState.NodeIdHex} name={nodeState.ShortName ?? "?"} role={nodeState.Role} type={cotType} icon={iconPath}");
 
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -76,9 +84,9 @@ namespace WinTakMeshtasticPlugin.CoT
             // Contact with callsign
             sb.AppendFormat("<contact callsign=\"{0}\"/>", callsign);
 
-            // Team color based on channel membership
-            var teamColor = GetTeamColorForChannel(nodeState.PrimaryChannel);
-            sb.AppendFormat("<__group name=\"{0}\" role=\"Team Member\"/>", teamColor);
+            // NOTE: __group element intentionally omitted for mesh nodes
+            // __group forces team-colored dot icons which override custom usericon
+            // ATAK_PLUGIN (portnum 72) passthrough keeps __group for TAK interop
 
             // Track element with speed/course (WinTAK displays this in tooltip)
             // Speed is in m/s, course in degrees
@@ -116,6 +124,13 @@ namespace WinTakMeshtasticPlugin.CoT
             sb.AppendFormat("<role>{0}</role>", nodeState.Role);
             sb.AppendFormat("<lastHeard>{0}</lastHeard>", FormatCotTime(nodeState.LastHeard));
             sb.Append("</__meshtastic>");
+
+            // Custom icon for mesh nodes (usericon element in detail section)
+            // iconPath was already retrieved at the start of this method
+            if (!string.IsNullOrEmpty(iconPath))
+            {
+                sb.AppendFormat("<usericon iconsetpath=\"{0}\"/>", iconPath);
+            }
 
             sb.Append("</detail>");
             sb.Append("</event>");
@@ -191,25 +206,95 @@ namespace WinTakMeshtasticPlugin.CoT
 
         /// <summary>
         /// Get the CoT type string for a device role.
-        /// Per CLAUDE.md CoT Schema Rules.
+        /// Uses valid WinTAK CoT types from C:\Program Files\WinTAK\Assets\cot\CoTtypes.xml
+        /// IMPORTANT: These codes are verified against the actual file. Do not change without checking.
         /// </summary>
         public static string GetCotTypeForRole(DeviceRole role)
         {
             return role switch
             {
-                DeviceRole.Router => "a-f-G-U-C-I",      // Infrastructure
-                DeviceRole.RouterClient => "a-f-G-U-C-I",
-                DeviceRole.Repeater => "a-f-G-U-C-I",
-                DeviceRole.Tracker => "a-f-G-E-S",       // Equipment/sensor
-                DeviceRole.TakTracker => "a-f-G-E-S",
+                // Infrastructure roles - Tower (a-f-G-I-U-T-com-tow)
+                DeviceRole.Router => "a-f-G-I-U-T-com-tow",       // Tower
+                DeviceRole.RouterClient => "a-f-G-I-U-T-com-tow", // ROUTER_LATE - Tower
+                DeviceRole.Repeater => "a-f-G-I-U-T-com-tow",     // Tower (not radio)
+
+                // Base station - Civilian structure (lowercase 'c' required)
+                DeviceRole.ClientBase => "a-f-G-I-c",             // Civilian
+
+                // Equipment/sensor roles - Sensor
+                DeviceRole.Tracker => "a-f-G-E-S",
+                DeviceRole.LostAndFound => "a-f-G-E-S",
                 DeviceRole.Sensor => "a-f-G-E-S",
-                DeviceRole.Client => "a-f-G-U-C",        // Friendly ground civilian
-                DeviceRole.ClientMute => "a-f-G-U-C",
-                DeviceRole.ClientHidden => "a-f-G-U-C",
-                DeviceRole.Tak => "a-f-G-U-C",
-                DeviceRole.LostAndFound => "a-f-G-U-C",
-                _ => "a-f-G"                             // Unknown: friendly ground unspecified
+
+                // TAK roles
+                DeviceRole.Tak => "a-f-G-U-C",                    // Combat
+                DeviceRole.TakTracker => "a-f-G-E-V",             // Ground vehicle
+
+                // Client roles
+                DeviceRole.Client => "a-f-G-U-U-S-R",             // Radio unit (note: double U)
+                DeviceRole.ClientMute => "a-f-G-U",               // Unit
+                DeviceRole.ClientHidden => "a-f-G-U",             // Unit
+
+                // Unknown/default - Unit
+                _ => "a-f-G-U"
             };
+        }
+
+        /// <summary>
+        /// Iconset UUID for Meshtastic icons.
+        /// Icons are stored in: %appdata%\wintak\Databases\iconcache\{uuid}\Meshtastic\
+        /// </summary>
+        public const string MeshtasticIconsetUuid = "a1b2c3d4-mesh-icon-set-e5f6g7h8";
+
+        /// <summary>
+        /// Alert level for node status visualization.
+        /// Controls which icon variant is used (base, warning, critical).
+        /// </summary>
+        public enum AlertLevel
+        {
+            /// <summary>No alert - use base icon (e.g., mesh_router.png)</summary>
+            None,
+            /// <summary>Warning condition - use _warning variant (e.g., mesh_router_warning.png)</summary>
+            Warning,
+            /// <summary>Critical condition - use _critical variant (e.g., mesh_router_critical.png)</summary>
+            Critical
+        }
+
+        /// <summary>
+        /// Get the custom icon path for a device role and alert level.
+        /// </summary>
+        /// <param name="role">The Meshtastic device role.</param>
+        /// <param name="alertLevel">Alert level for icon variant selection.</param>
+        /// <returns>Iconsetpath string for usericon element.</returns>
+        public static string GetIconPathForRole(DeviceRole role, AlertLevel alertLevel = AlertLevel.None)
+        {
+            // Get base filename for role
+            string baseFilename = role switch
+            {
+                DeviceRole.Client => "mesh_client",
+                DeviceRole.ClientMute => "mesh_client_mute",
+                DeviceRole.ClientHidden => "mesh_client_hidden",
+                DeviceRole.ClientBase => "mesh_client_base",    // Was FIXED before renaming
+                DeviceRole.Tracker => "mesh_tracker",
+                DeviceRole.LostAndFound => "mesh_lost_and_found",
+                DeviceRole.Sensor => "mesh_sensor",
+                DeviceRole.Tak => "mesh_tak",
+                DeviceRole.TakTracker => "mesh_tak_tracker",
+                DeviceRole.Repeater => "mesh_repeater",
+                DeviceRole.Router => "mesh_router",
+                DeviceRole.RouterClient => "mesh_router_late",  // ROUTER_LATE in newer firmware
+                _ => "mesh_client"  // Default fallback
+            };
+
+            // Add alert suffix if applicable (for future use)
+            string suffix = alertLevel switch
+            {
+                AlertLevel.Warning => "_warning",
+                AlertLevel.Critical => "_critical",
+                _ => ""
+            };
+
+            return $"{MeshtasticIconsetUuid}/Meshtastic/{baseFilename}{suffix}.png";
         }
 
         /// <summary>
@@ -312,69 +397,86 @@ namespace WinTakMeshtasticPlugin.CoT
                 }
             }
 
-            // Line 1: Battery and uptime
+            // Line 1: Node ID, Role, Channel
             var line1 = new System.Collections.Generic.List<string>();
+            line1.Add($"Node: {nodeState.NodeIdHex}");
+            if (nodeState.Role != DeviceRole.Client) // Only show if not default
+                line1.Add($"Role: {nodeState.Role}");
+            if (nodeState.PrimaryChannel >= 0)
+                line1.Add($"Ch: {nodeState.PrimaryChannel}");
+            lines.Add(string.Join(" | ", line1));
+
+            // Line 2: Battery and uptime
+            var line2 = new System.Collections.Generic.List<string>();
             if (nodeState.DeviceTelemetry != null)
             {
                 var tel = nodeState.DeviceTelemetry;
                 if (tel.BatteryLevel.HasValue)
                 {
                     var batteryStr = tel.Voltage.HasValue
-                        ? $"Battery: {tel.BatteryLevel}% ({tel.Voltage:F1}V)"
-                        : $"Battery: {tel.BatteryLevel}%";
-                    line1.Add(batteryStr);
+                        ? $"Bat: {tel.BatteryLevel}% ({tel.Voltage:F1}V)"
+                        : $"Bat: {tel.BatteryLevel}%";
+                    line2.Add(batteryStr);
                 }
                 if (tel.UptimeSeconds.HasValue)
                 {
-                    line1.Add($"Uptime: {tel.UptimeFormatted}");
+                    line2.Add($"Up: {tel.UptimeFormatted}");
                 }
-            }
-            if (line1.Count > 0)
-                lines.Add(string.Join(" | ", line1));
-
-            // Line 2: Channel utilization
-            var line2 = new System.Collections.Generic.List<string>();
-            if (nodeState.DeviceTelemetry != null)
-            {
-                var tel = nodeState.DeviceTelemetry;
-                if (tel.ChannelUtilization.HasValue)
-                    line2.Add($"ChUtil: {tel.ChannelUtilization:F0}%");
-                if (tel.AirUtilTx.HasValue)
-                    line2.Add($"AirTX: {tel.AirUtilTx:F0}%");
             }
             if (line2.Count > 0)
                 lines.Add(string.Join(" | ", line2));
 
-            // Line 3: Temperature and humidity
+            // Line 3: Channel utilization and SNR/Hops
             var line3 = new System.Collections.Generic.List<string>();
+            if (nodeState.DeviceTelemetry != null)
+            {
+                var tel = nodeState.DeviceTelemetry;
+                if (tel.ChannelUtilization.HasValue)
+                    line3.Add($"ChUtil: {tel.ChannelUtilization:F0}%");
+                if (tel.AirUtilTx.HasValue)
+                    line3.Add($"AirTX: {tel.AirUtilTx:F0}%");
+            }
+            if (nodeState.LastSnr.HasValue)
+                line3.Add($"SNR: {nodeState.LastSnr:F1}dB");
+            if (nodeState.LastHopCount.HasValue)
+                line3.Add($"Hops: {nodeState.LastHopCount}");
+            if (line3.Count > 0)
+                lines.Add(string.Join(" | ", line3));
+
+            // Line 4: Temperature and humidity
+            var line4 = new System.Collections.Generic.List<string>();
             if (nodeState.EnvironmentTelemetry != null)
             {
                 var env = nodeState.EnvironmentTelemetry;
                 if (env.Temperature.HasValue)
-                    line3.Add($"Temp: {env.TemperatureFahrenheit:F0}°F / {env.Temperature:F0}°C");
+                    line4.Add($"Temp: {env.TemperatureFahrenheit:F0}°F");
                 if (env.RelativeHumidity.HasValue)
-                    line3.Add($"Hum: {env.RelativeHumidity:F0}%");
+                    line4.Add($"Hum: {env.RelativeHumidity:F0}%");
+                if (env.BarometricPressure.HasValue)
+                    line4.Add($"Press: {env.PressureInHg:F2}\"");
             }
-            if (line3.Count > 0)
-                lines.Add(string.Join(" | ", line3));
-
-            // Line 4: Pressure
-            if (nodeState.EnvironmentTelemetry?.BarometricPressure.HasValue == true)
-            {
-                var env = nodeState.EnvironmentTelemetry;
-                lines.Add($"Pressure: {env.PressureInHg:F2} inHg");
-            }
+            if (line4.Count > 0)
+                lines.Add(string.Join(" | ", line4));
 
             // Line 5: Hardware and firmware
             var line5 = new System.Collections.Generic.List<string>();
             if (!string.IsNullOrEmpty(nodeState.HardwareModel))
-                line5.Add($"Hardware: {nodeState.HardwareModel}");
+                line5.Add($"HW: {nodeState.HardwareModel}");
             if (!string.IsNullOrEmpty(nodeState.FirmwareVersion))
                 line5.Add($"FW: {nodeState.FirmwareVersion}");
             if (line5.Count > 0)
                 lines.Add(string.Join(" | ", line5));
 
-            // Line 6: Neighbors summary
+            // Line 6: Last heard
+            var lastHeardAge = DateTime.UtcNow - nodeState.LastHeard;
+            if (lastHeardAge.TotalMinutes < 60)
+                lines.Add($"Heard: {lastHeardAge.TotalMinutes:F0}m ago");
+            else if (lastHeardAge.TotalHours < 24)
+                lines.Add($"Heard: {lastHeardAge.TotalHours:F1}h ago");
+            else
+                lines.Add($"Heard: {lastHeardAge.TotalDays:F1}d ago");
+
+            // Line 7: Neighbors summary
             if (nodeState.Neighbors != null && nodeState.Neighbors.Count > 0)
             {
                 var neighborParts = new System.Collections.Generic.List<string>();
@@ -391,17 +493,27 @@ namespace WinTakMeshtasticPlugin.CoT
                 lines.Add($"Neighbors: {neighborStr}");
             }
 
-            // If no telemetry at all, ensure we have at least node identity
-            if (lines.Count == 0)
-            {
-                // Show whatever name info we have
-                if (!string.IsNullOrEmpty(nodeState.LongName))
-                    lines.Add(nodeState.LongName);
-                else if (!string.IsNullOrEmpty(nodeState.ShortName))
-                    lines.Add(nodeState.ShortName);
-            }
-
             return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// Write a message to the plugin log file for diagnostics.
+        /// </summary>
+        private static void LogToFile(string message)
+        {
+            try
+            {
+                var logDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "wintak", "plugins", "WinTakMeshtasticPlugin");
+                Directory.CreateDirectory(logDir);
+                var logPath = Path.Combine(logDir, "load.log");
+                File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\r\n");
+            }
+            catch
+            {
+                // Ignore logging errors
+            }
         }
     }
 

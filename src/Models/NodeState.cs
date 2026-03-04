@@ -113,6 +113,16 @@ namespace WinTakMeshtasticPlugin.Models
         public DateTime LastPositionUpdate { get; set; } = DateTime.MinValue;
 
         /// <summary>
+        /// SNR of last received packet from this node (in dB).
+        /// </summary>
+        public float? LastSnr { get; set; }
+
+        /// <summary>
+        /// Hop count of last received packet from this node.
+        /// </summary>
+        public int? LastHopCount { get; set; }
+
+        /// <summary>
         /// Check if the node is stale based on the given timeout.
         /// </summary>
         public bool IsStale(TimeSpan staleTimeout)
@@ -134,14 +144,15 @@ namespace WinTakMeshtasticPlugin.Models
         Client = 0,
         ClientMute = 1,
         Router = 2,
-        RouterClient = 3,
+        RouterClient = 3,   // ROUTER_LATE in newer firmware
         Repeater = 4,
         Tracker = 5,
         Sensor = 6,
         Tak = 7,
         ClientHidden = 8,
         LostAndFound = 9,
-        TakTracker = 10
+        TakTracker = 10,
+        ClientBase = 12     // Was FIXED before renaming
     }
 
     /// <summary>

@@ -56,8 +56,8 @@ namespace WinTakMeshtasticPlugin.Handlers
             // Look up sender's shortname if available
             string senderCallsign = GetSenderCallsign(context, senderNodeId);
 
-            // Generate sender UID for CoT
-            string senderUid = $"MESH-{context.ConnectionId}-{senderNodeId:X8}";
+            // Generate stable sender UID for CoT (no connection ID to avoid duplicates on reconnect)
+            string senderUid = $"MESH-{senderNodeId:X8}";
 
             // Generate channel-specific chat room name (MSG-02: different channels = different windows)
             string chatRoom = GetChannelChatRoomName(context, channelIndex);

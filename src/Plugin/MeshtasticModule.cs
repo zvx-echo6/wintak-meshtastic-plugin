@@ -281,7 +281,7 @@ namespace WinTakMeshtasticPlugin.Plugin
 
             var nodeState = _nodeStateManager.GetOrCreate(e.ConnectionId, info.Num);
 
-            // Store user info (shortname, longname, hardware)
+            // Store user info (shortname, longname, hardware, role)
             if (info.User != null)
             {
                 if (!string.IsNullOrEmpty(info.User.ShortName))
@@ -290,6 +290,11 @@ namespace WinTakMeshtasticPlugin.Plugin
                     nodeState.LongName = info.User.LongName;
                 if (info.User.HwModel != Meshtastic.Protobufs.HardwareModel.Unset)
                     nodeState.HardwareModel = info.User.HwModel.ToString();
+
+                // Store device role for icon selection
+                nodeState.Role = MapUserRole(info.User.Role);
+
+                WriteLog($"NodeInfo: {nodeState.NodeIdHex} short={info.User.ShortName} role={info.User.Role} -> {nodeState.Role}");
             }
 
             // Store position if present
@@ -318,6 +323,29 @@ namespace WinTakMeshtasticPlugin.Plugin
             System.Diagnostics.Debug.WriteLine(
                 $"[Meshtastic] NodeInfo from config: {nodeState.DisplayName} " +
                 $"(pos: {nodeState.Latitude?.ToString("F5") ?? "none"}, {nodeState.Longitude?.ToString("F5") ?? "none"})");
+        }
+
+        /// <summary>
+        /// Map Meshtastic protobuf Role enum to our DeviceRole enum.
+        /// </summary>
+        private static DeviceRole MapUserRole(Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role role)
+        {
+            return role switch
+            {
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Client => DeviceRole.Client,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.ClientMute => DeviceRole.ClientMute,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Router => DeviceRole.Router,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.RouterClient => DeviceRole.RouterClient,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Repeater => DeviceRole.Repeater,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Tracker => DeviceRole.Tracker,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Sensor => DeviceRole.Sensor,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.Tak => DeviceRole.Tak,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.ClientHidden => DeviceRole.ClientHidden,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.LostAndFound => DeviceRole.LostAndFound,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.TakTracker => DeviceRole.TakTracker,
+                Meshtastic.Protobufs.Config.Types.DeviceConfig.Types.Role.ClientBase => DeviceRole.ClientBase,
+                _ => DeviceRole.Client
+            };
         }
 
         /// <summary>
@@ -358,6 +386,12 @@ namespace WinTakMeshtasticPlugin.Plugin
             try
             {
                 string cotXml = _cotBuilder.BuildNodePli(nodeState);
+
+                // DEBUG: Log full CoT XML to verify usericon element is present
+                // Write to load.log so user can easily view it
+                WriteLog($"[ICON-DEBUG] Full CoT XML for {nodeState.DisplayName}:");
+                WriteLog(cotXml);
+
                 var xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(cotXml);
                 _cotMessageSender.Send(xmlDoc);
@@ -659,6 +693,13 @@ namespace WinTakMeshtasticPlugin.Plugin
             if (_client != null)
             {
                 System.Diagnostics.Debug.WriteLine("[Meshtastic] Disconnecting existing connection...");
+
+                // Capture connectionId before disposing
+                var oldConnectionId = _client.ConnectionId;
+
+                // Clear topology lines from old connection
+                _topologyOverlayManager?.ClearAllLinks();
+
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
@@ -667,6 +708,10 @@ namespace WinTakMeshtasticPlugin.Plugin
                 _client.Dispose();
                 _client = null;
                 _outboundMessageService = null;
+
+                // Clear internal node state for old connection to prevent duplicates
+                _nodeStateManager.RemoveByConnection(oldConnectionId);
+                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Cleared node state for old connection {oldConnectionId}");
             }
 
             // Clear channel state on new connection
@@ -745,6 +790,9 @@ namespace WinTakMeshtasticPlugin.Plugin
                 // Clear topology overlay lines immediately on disconnect
                 _topologyOverlayManager?.ClearAllLinks();
 
+                // Capture connectionId before disposing client
+                var connectionId = _client.ConnectionId;
+
                 await _client.DisconnectAsync();
                 _client.PacketReceived -= OnPacketReceived;
                 _client.ChannelReceived -= OnChannelReceived;
@@ -752,6 +800,11 @@ namespace WinTakMeshtasticPlugin.Plugin
                 _client.StateChanged -= OnConnectionStateChanged;
                 _client.Dispose();
                 _client = null;
+
+                // Clear internal node state for this connection to prevent accumulation
+                // (CoT markers persist on map until stale; this just cleans our internal tracking)
+                _nodeStateManager.RemoveByConnection(connectionId);
+                System.Diagnostics.Debug.WriteLine($"[Meshtastic] Cleared node state for connection {connectionId}");
 
                 if (_outboundMessageService != null)
                 {

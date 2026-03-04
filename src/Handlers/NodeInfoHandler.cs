@@ -83,7 +83,7 @@ namespace WinTakMeshtasticPlugin.Handlers
 
             System.Diagnostics.Debug.WriteLine(
                 $"[NodeInfoHandler] NodeInfo for {nodeState.NodeIdHex}: short=\"{user.ShortName}\", " +
-                $"long=\"{user.LongName}\", hw={user.HwModel}, role={user.Role}");
+                $"long=\"{user.LongName}\", hw={user.HwModel}, rawRole={user.Role}, mappedRole={nodeState.Role}");
 
             // If the node has position and shortname changed, regenerate CoT to update callsign
             if (hasPosition && shortNameChanged && context.CotBuilder != null)
@@ -131,6 +131,7 @@ namespace WinTakMeshtasticPlugin.Handlers
                 Config.Types.DeviceConfig.Types.Role.ClientHidden => DeviceRole.ClientHidden,
                 Config.Types.DeviceConfig.Types.Role.LostAndFound => DeviceRole.LostAndFound,
                 Config.Types.DeviceConfig.Types.Role.TakTracker => DeviceRole.TakTracker,
+                Config.Types.DeviceConfig.Types.Role.ClientBase => DeviceRole.ClientBase,
                 _ => DeviceRole.Client
             };
         }

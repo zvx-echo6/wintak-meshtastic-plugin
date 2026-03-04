@@ -99,6 +99,12 @@ namespace WinTakMeshtasticPlugin.Handlers
                 nodeState.ChannelsMembership.Add((int)packet.Channel);
             }
 
+            // Store SNR and hop count from packet
+            if (packet.RxSnr != 0)
+                nodeState.LastSnr = packet.RxSnr;
+            if (packet.HopStart > 0 && packet.HopLimit <= packet.HopStart)
+                nodeState.LastHopCount = (int)(packet.HopStart - packet.HopLimit);
+
             // Save updated state
             context.NodeStateManager.Update(nodeState);
 
@@ -121,7 +127,7 @@ namespace WinTakMeshtasticPlugin.Handlers
             }
 
             System.Diagnostics.Debug.WriteLine(
-                $"[PositionHandler] Position for {nodeState.DisplayName}: {latitude:F6}, {longitude:F6}");
+                $"[PositionHandler] Position for {nodeState.DisplayName}: {latitude:F6}, {longitude:F6}, role={nodeState.Role}");
 
             return Task.FromResult<PacketHandlerResult?>(new PacketHandlerResult
             {

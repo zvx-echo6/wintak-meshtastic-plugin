@@ -22,16 +22,16 @@ namespace WinTakMeshtasticPlugin.Plugin
 
         /// <summary>
         /// Register a packet handler for a specific portnum.
+        /// If a handler is already registered for this portnum, it will be replaced.
         /// </summary>
         /// <param name="handler">The handler to register.</param>
-        /// <exception cref="ArgumentException">Thrown if a handler for this portnum already exists.</exception>
         public void Register(IPacketHandler handler)
         {
             if (_handlers.ContainsKey(handler.HandledPortNum))
             {
-                throw new ArgumentException(
-                    $"Handler for portnum {handler.HandledPortNum} already registered.",
-                    nameof(handler));
+                // Replace existing handler instead of throwing
+                _logger?.LogDebug("Replacing existing handler for portnum {PortNum}", handler.HandledPortNum);
+                System.Diagnostics.Debug.WriteLine($"[HandlerRegistry] Replacing handler for {handler.HandledPortNum}");
             }
 
             _handlers[handler.HandledPortNum] = handler;
