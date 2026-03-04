@@ -11,6 +11,10 @@ namespace WinTakMeshtasticPlugin.CoT
     /// <summary>
     /// Builder for Cursor-on-Target (CoT) XML messages.
     /// All CoT must validate against TAK 5.x schema.
+    ///
+    /// Two rendering modes:
+    /// 1. Client roles (CLIENT, CLIENT_MUTE, CLIENT_HIDDEN) → __group circles with channel color
+    /// 2. All other roles → Native 2525 symbols from type code (no __group)
     /// </summary>
     public class CotBuilder : ICotBuilder
     {
@@ -28,6 +32,9 @@ namespace WinTakMeshtasticPlugin.CoT
 
         /// <summary>
         /// Build a Position Location Information (PLI) CoT event for a mesh node.
+        /// Uses two rendering modes based on device role:
+        /// - Client roles: Channel-colored circles via __group
+        /// - Infrastructure/sensor roles: Native 2525 symbols via type code
         /// </summary>
         /// <param name="nodeState">The node state with position and identity info.</param>
         /// <param name="staleTime">How long until the event goes stale. Default: 30 minutes.</param>
@@ -44,8 +51,23 @@ namespace WinTakMeshtasticPlugin.CoT
             var now = DateTime.UtcNow;
             var staleAt = now + effectiveStaleTime;
 
-            // Get CoT type based on device role (per CLAUDE.md)
-            var cotType = GetCotTypeForRole(nodeState.Role);
+            // Determine rendering mode based on device role
+            bool useGroupCircle = IsClientRole(nodeState.Role);
+            string cotType;
+            string channelColor = null;
+
+            if (useGroupCircle)
+            {
+                // Mode 1: Client/TAK roles get channel-colored circles
+                // Type code still used for User Details display
+                cotType = GetCotTypeForRole(nodeState.Role);
+                channelColor = GetChannelColor(nodeState.PrimaryChannel);
+            }
+            else
+            {
+                // Mode 2: Infrastructure/sensor roles get 2525 symbols
+                cotType = GetCotTypeForRole(nodeState.Role);
+            }
 
             // Generate stable event UID from node ID only (no connection ID)
             // This prevents duplicate markers when reconnecting to the same mesh
@@ -53,12 +75,6 @@ namespace WinTakMeshtasticPlugin.CoT
 
             // Callsign based on DisplayNameMode (SEC-07: XML-escape all mesh strings)
             var callsign = XmlEscape(GetDisplayCallsign(nodeState, DisplayNameMode));
-
-            // Get icon path for this role with alert level (default: no alert)
-            var iconPath = GetIconPathForRole(nodeState.Role, AlertLevel.None);
-
-            // Single-line log for role/type/icon mapping diagnostics
-            LogToFile($"[TypeMap] NodeId={nodeState.NodeIdHex} name={nodeState.ShortName ?? "?"} role={nodeState.Role} type={cotType} icon={iconPath}");
 
             var sb = new StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -84,9 +100,13 @@ namespace WinTakMeshtasticPlugin.CoT
             // Contact with callsign
             sb.AppendFormat("<contact callsign=\"{0}\"/>", callsign);
 
-            // NOTE: __group element intentionally omitted for mesh nodes
-            // __group forces team-colored dot icons which override custom usericon
-            // ATAK_PLUGIN (portnum 72) passthrough keeps __group for TAK interop
+            // __group element - only for client roles (Mode 1)
+            // This forces channel-colored circle icons
+            if (useGroupCircle && channelColor != null)
+            {
+                sb.AppendFormat("<__group name=\"{0}\" role=\"Team Member\"/>", channelColor);
+            }
+            // Mode 2: No __group - WinTAK renders native 2525 symbol from type code
 
             // Track element with speed/course (WinTAK displays this in tooltip)
             // Speed is in m/s, course in degrees
@@ -125,17 +145,25 @@ namespace WinTakMeshtasticPlugin.CoT
             sb.AppendFormat("<lastHeard>{0}</lastHeard>", FormatCotTime(nodeState.LastHeard));
             sb.Append("</__meshtastic>");
 
-            // Custom icon for mesh nodes (usericon element in detail section)
-            // iconPath was already retrieved at the start of this method
-            if (!string.IsNullOrEmpty(iconPath))
-            {
-                sb.AppendFormat("<usericon iconsetpath=\"{0}\"/>", iconPath);
-            }
+            // No usericon element - use native 2525 rendering
 
             sb.Append("</detail>");
             sb.Append("</event>");
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Check if a device role should use __group circles (Mode 1).
+        /// CLIENT, CLIENT_MUTE, CLIENT_HIDDEN, TAK → colored circles
+        /// All other roles → 2525 symbols (Mode 2)
+        /// </summary>
+        private static bool IsClientRole(DeviceRole role)
+        {
+            return role == DeviceRole.Client ||
+                   role == DeviceRole.ClientMute ||
+                   role == DeviceRole.ClientHidden ||
+                   role == DeviceRole.Tak;
         }
 
         /// <summary>
@@ -206,114 +234,61 @@ namespace WinTakMeshtasticPlugin.CoT
 
         /// <summary>
         /// Get the CoT type string for a device role.
-        /// Uses valid WinTAK CoT types from C:\Program Files\WinTAK\Assets\cot\CoTtypes.xml
-        /// IMPORTANT: These codes are verified against the actual file. Do not change without checking.
+        /// Mode 2 roles get 2525 symbols rendered by WinTAK.
+        /// Mode 1 roles (client/TAK) also use specific types for User Details display.
         /// </summary>
         public static string GetCotTypeForRole(DeviceRole role)
         {
             return role switch
             {
-                // Infrastructure roles - Tower (a-f-G-I-U-T-com-tow)
-                DeviceRole.Router => "a-f-G-I-U-T-com-tow",       // Tower
-                DeviceRole.RouterClient => "a-f-G-I-U-T-com-tow", // ROUTER_LATE - Tower
-                DeviceRole.Repeater => "a-f-G-I-U-T-com-tow",     // Tower (not radio)
+                // Infrastructure roles - Telecom facility (Mode 2)
+                DeviceRole.Router => "a-f-G-I-U-T",
+                DeviceRole.RouterClient => "a-f-G-I-U-T",  // ROUTER_LATE
+                DeviceRole.Repeater => "a-f-G-I-U-T",
 
-                // Base station - Civilian structure (lowercase 'c' required)
-                DeviceRole.ClientBase => "a-f-G-I-c",             // Civilian
+                // Base station - Fixed station (Mode 2)
+                DeviceRole.ClientBase => "a-f-G-U-U-S-F",
 
-                // Equipment/sensor roles - Sensor
+                // Equipment/sensor roles (Mode 2)
+                DeviceRole.TakTracker => "a-f-G-E-S",
                 DeviceRole.Tracker => "a-f-G-E-S",
                 DeviceRole.LostAndFound => "a-f-G-E-S",
-                DeviceRole.Sensor => "a-f-G-E-S",
+                DeviceRole.Sensor => "a-f-G-E-S-E",  // Electronic sensor
 
-                // TAK roles
-                DeviceRole.Tak => "a-f-G-U-C",                    // Combat
-                DeviceRole.TakTracker => "a-f-G-E-V",             // Ground vehicle
+                // Client/TAK roles (Mode 1 - __group provides visual, type for User Details)
+                DeviceRole.Client => "a-f-G-U-U-S-R",      // Radio unit
+                DeviceRole.ClientMute => "a-f-G-U",        // Unit
+                DeviceRole.ClientHidden => "a-f-G-U",      // Unit
+                DeviceRole.Tak => "a-f-G-U-C",             // Unit > Combat
 
-                // Client roles
-                DeviceRole.Client => "a-f-G-U-U-S-R",             // Radio unit (note: double U)
-                DeviceRole.ClientMute => "a-f-G-U",               // Unit
-                DeviceRole.ClientHidden => "a-f-G-U",             // Unit
-
-                // Unknown/default - Unit
-                _ => "a-f-G-U"
+                // Unknown/default
+                _ => "a-f-G-U-C"
             };
         }
 
         /// <summary>
-        /// Iconset UUID for Meshtastic icons.
-        /// Icons are stored in: %appdata%\wintak\Databases\iconcache\{uuid}\Meshtastic\
+        /// Overflow colors for channels 8+.
+        /// Cycles through: Cyan, White, Maroon, Brown, Magenta
         /// </summary>
-        public const string MeshtasticIconsetUuid = "a1b2c3d4-mesh-icon-set-e5f6g7h8";
+        private static readonly string[] OverflowColors = { "Cyan", "White", "Maroon", "Brown", "Magenta" };
 
         /// <summary>
-        /// Alert level for node status visualization.
-        /// Controls which icon variant is used (base, warning, critical).
+        /// Get the TAK team color for a channel index.
+        /// Used for Mode 1 (__group circles) rendering.
         /// </summary>
-        public enum AlertLevel
-        {
-            /// <summary>No alert - use base icon (e.g., mesh_router.png)</summary>
-            None,
-            /// <summary>Warning condition - use _warning variant (e.g., mesh_router_warning.png)</summary>
-            Warning,
-            /// <summary>Critical condition - use _critical variant (e.g., mesh_router_critical.png)</summary>
-            Critical
-        }
-
-        /// <summary>
-        /// Get the custom icon path for a device role and alert level.
-        /// </summary>
-        /// <param name="role">The Meshtastic device role.</param>
-        /// <param name="alertLevel">Alert level for icon variant selection.</param>
-        /// <returns>Iconsetpath string for usericon element.</returns>
-        public static string GetIconPathForRole(DeviceRole role, AlertLevel alertLevel = AlertLevel.None)
-        {
-            // Get base filename for role
-            string baseFilename = role switch
-            {
-                DeviceRole.Client => "mesh_client",
-                DeviceRole.ClientMute => "mesh_client_mute",
-                DeviceRole.ClientHidden => "mesh_client_hidden",
-                DeviceRole.ClientBase => "mesh_client_base",    // Was FIXED before renaming
-                DeviceRole.Tracker => "mesh_tracker",
-                DeviceRole.LostAndFound => "mesh_lost_and_found",
-                DeviceRole.Sensor => "mesh_sensor",
-                DeviceRole.Tak => "mesh_tak",
-                DeviceRole.TakTracker => "mesh_tak_tracker",
-                DeviceRole.Repeater => "mesh_repeater",
-                DeviceRole.Router => "mesh_router",
-                DeviceRole.RouterClient => "mesh_router_late",  // ROUTER_LATE in newer firmware
-                _ => "mesh_client"  // Default fallback
-            };
-
-            // Add alert suffix if applicable (for future use)
-            string suffix = alertLevel switch
-            {
-                AlertLevel.Warning => "_warning",
-                AlertLevel.Critical => "_critical",
-                _ => ""
-            };
-
-            return $"{MeshtasticIconsetUuid}/Meshtastic/{baseFilename}{suffix}.png";
-        }
-
-        /// <summary>
-        /// Get the team color for a channel index.
-        /// Per CLAUDE.md channel-to-team-color defaults.
-        /// </summary>
-        public static string GetTeamColorForChannel(int channelIndex)
+        public static string GetChannelColor(int channelIndex)
         {
             return channelIndex switch
             {
-                0 => "Cyan",
-                1 => "Green",
-                2 => "Yellow",
-                3 => "Orange",
-                4 => "Red",
-                5 => "Purple",
-                6 => "White",
-                7 => "Magenta",
-                _ => "Cyan"
+                0 => "Dark Blue",
+                1 => "Teal",
+                2 => "Purple",
+                3 => "Green",
+                4 => "Dark Green",
+                5 => "Yellow",
+                6 => "Orange",
+                7 => "Red",
+                _ => OverflowColors[(channelIndex - 8) % OverflowColors.Length]
             };
         }
 

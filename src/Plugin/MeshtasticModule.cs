@@ -10,9 +10,9 @@ using System.Xml;
 using Prism.Events;
 using Prism.Mef.Modularity;
 using Prism.Modularity;
-using WinTakMeshtasticPlugin.Helpers;
 using WinTak.Common.CoT;
 using WinTak.Common.Services;
+using WinTakMeshtasticPlugin.Helpers;
 using WinTak.CursorOnTarget.Graphics;
 using WinTak.CursorOnTarget.Services;
 using WinTak.Display;
@@ -711,9 +711,10 @@ namespace WinTakMeshtasticPlugin.Plugin
             // Clear channel state on new connection
             _channelManager.Clear();
 
-            // Store current settings
+            // Store and persist current settings
             _settings.Hostname = hostname;
             _settings.Port = port;
+            _settings.Save();
 
             var config = new MeshtasticClientConfig
             {
@@ -770,6 +771,7 @@ namespace WinTakMeshtasticPlugin.Plugin
             _settings.Port = port;
             _settings.ReconnectIntervalSeconds = MathExtensions.Clamp(reconnectIntervalSeconds, 5, 60);
             _settings.AutoConnect = autoConnect;
+            _settings.Save();
         }
 
         /// <summary>

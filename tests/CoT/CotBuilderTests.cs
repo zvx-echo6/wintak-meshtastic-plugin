@@ -94,44 +94,30 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
         }
 
         [Fact]
-        public void BuildNodePli_DoesNotContainGroupElement()
+        public void BuildNodePli_ClientRole_ContainsGroupElement()
         {
-            // Arrange
-            var node = CreateTestNode();
-            node.ChannelsMembership.Add(1); // Channel 1 = Green
-
-            // Act
-            var cotXml = _builder.BuildNodePli(node);
-            var doc = new XmlDocument();
-            doc.LoadXml(cotXml);
-
-            // Assert - __group intentionally omitted to allow custom icons
-            // (team colors force colored dots that override usericon)
-            var groupNode = doc.SelectSingleNode("/event/detail/__group");
-            groupNode.Should().BeNull();
-        }
-
-        [Fact]
-        public void BuildNodePli_ClientRole_UsesRadioUnitCotType()
-        {
-            // Arrange
+            // Arrange - Client is Mode 1 (channel-colored circles via __group)
             var node = CreateTestNode();
             node.Role = DeviceRole.Client;
+            node.ChannelsMembership.Clear();
+            node.ChannelsMembership.Add(0); // Channel 0 = Dark Blue
 
             // Act
             var cotXml = _builder.BuildNodePli(node);
             var doc = new XmlDocument();
             doc.LoadXml(cotXml);
 
-            // Assert - Client uses Radio unit type (verified in WinTAK CoTtypes.xml)
-            var eventNode = doc.SelectSingleNode("/event");
-            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-U-S-R");
+            // Assert - Mode 1 roles have __group with channel color
+            var groupNode = doc.SelectSingleNode("/event/detail/__group");
+            groupNode.Should().NotBeNull();
+            groupNode!.Attributes!["name"]!.Value.Should().Be("Dark Blue");
+            groupNode.Attributes["role"]!.Value.Should().Be("Team Member");
         }
 
         [Fact]
-        public void BuildNodePli_RouterRole_UsesTowerCotType()
+        public void BuildNodePli_RouterRole_DoesNotContainGroupElement()
         {
-            // Arrange
+            // Arrange - Router is Mode 2 (2525 symbols, no __group)
             var node = CreateTestNode();
             node.Role = DeviceRole.Router;
 
@@ -140,9 +126,43 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
             var doc = new XmlDocument();
             doc.LoadXml(cotXml);
 
-            // Assert - Router uses Tower type (verified in WinTAK CoTtypes.xml)
+            // Assert - Mode 2 roles do NOT have __group
+            var groupNode = doc.SelectSingleNode("/event/detail/__group");
+            groupNode.Should().BeNull();
+        }
+
+        [Fact]
+        public void BuildNodePli_ClientRole_UsesRadioUnitCotType()
+        {
+            // Arrange - Client is Mode 1 (__group provides visual, type for User Details)
+            var node = CreateTestNode();
+            node.Role = DeviceRole.Client;
+
+            // Act
+            var cotXml = _builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert - Mode 1 Client uses Radio unit type a-f-G-U-U-S-R
             var eventNode = doc.SelectSingleNode("/event");
-            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-I-U-T-com-tow");
+            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-U-S-R");
+        }
+
+        [Fact]
+        public void BuildNodePli_RouterRole_UsesTelecomCotType()
+        {
+            // Arrange - Router is Mode 2 (2525 symbol from type code)
+            var node = CreateTestNode();
+            node.Role = DeviceRole.Router;
+
+            // Act
+            var cotXml = _builder.BuildNodePli(node);
+            var doc = new XmlDocument();
+            doc.LoadXml(cotXml);
+
+            // Assert - Mode 2 Router uses telecom facility type
+            var eventNode = doc.SelectSingleNode("/event");
+            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-I-U-T");
         }
 
         [Fact]
@@ -268,34 +288,40 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
         }
 
         [Theory]
-        [InlineData(0, "Cyan")]
-        [InlineData(1, "Green")]
-        [InlineData(2, "Yellow")]
-        [InlineData(3, "Orange")]
-        [InlineData(4, "Red")]
-        [InlineData(5, "Purple")]
-        [InlineData(6, "White")]
-        [InlineData(7, "Magenta")]
-        [InlineData(8, "Cyan")] // Default for out of range
-        public void GetTeamColorForChannel_MapsCorrectly(int channel, string expectedColor)
+        [InlineData(0, "Dark Blue")]
+        [InlineData(1, "Teal")]
+        [InlineData(2, "Purple")]
+        [InlineData(3, "Green")]
+        [InlineData(4, "Dark Green")]
+        [InlineData(5, "Yellow")]
+        [InlineData(6, "Orange")]
+        [InlineData(7, "Red")]
+        [InlineData(8, "Cyan")]    // Overflow: cycles through Cyan, White, Maroon, Brown, Magenta
+        [InlineData(9, "White")]
+        [InlineData(10, "Maroon")]
+        [InlineData(11, "Brown")]
+        [InlineData(12, "Magenta")]
+        [InlineData(13, "Cyan")]   // Cycles back
+        public void GetChannelColor_MapsCorrectly(int channel, string expectedColor)
         {
-            CotBuilder.GetTeamColorForChannel(channel).Should().Be(expectedColor);
+            CotBuilder.GetChannelColor(channel).Should().Be(expectedColor);
         }
 
         [Theory]
-        // Verified against WinTAK's C:\Program Files\WinTAK\Assets\cot\CoTtypes.xml
-        [InlineData(DeviceRole.Client, "a-f-G-U-U-S-R")]       // Radio unit
-        [InlineData(DeviceRole.ClientMute, "a-f-G-U")]         // Unit
-        [InlineData(DeviceRole.ClientHidden, "a-f-G-U")]       // Unit
-        [InlineData(DeviceRole.ClientBase, "a-f-G-I-c")]       // Civilian (lowercase c)
-        [InlineData(DeviceRole.Router, "a-f-G-I-U-T-com-tow")] // Tower
-        [InlineData(DeviceRole.RouterClient, "a-f-G-I-U-T-com-tow")] // Tower (ROUTER_LATE)
-        [InlineData(DeviceRole.Repeater, "a-f-G-I-U-T-com-tow")] // Tower
-        [InlineData(DeviceRole.Tracker, "a-f-G-E-S")]          // Sensor
-        [InlineData(DeviceRole.LostAndFound, "a-f-G-E-S")]     // Sensor
-        [InlineData(DeviceRole.Sensor, "a-f-G-E-S")]           // Sensor
-        [InlineData(DeviceRole.Tak, "a-f-G-U-C")]              // Combat
-        [InlineData(DeviceRole.TakTracker, "a-f-G-E-V")]       // Ground vehicle
+        // Mode 1 roles (CLIENT*, TAK) get __group circles, type for User Details
+        // Mode 2 roles get 2525 symbols from type code
+        [InlineData(DeviceRole.Client, "a-f-G-U-U-S-R")]       // Radio unit (Mode 1)
+        [InlineData(DeviceRole.ClientMute, "a-f-G-U")]         // Unit (Mode 1)
+        [InlineData(DeviceRole.ClientHidden, "a-f-G-U")]       // Unit (Mode 1)
+        [InlineData(DeviceRole.Tak, "a-f-G-U-C")]              // Unit > Combat (Mode 1)
+        [InlineData(DeviceRole.ClientBase, "a-f-G-U-U-S-F")]   // Fixed station (Mode 2)
+        [InlineData(DeviceRole.Router, "a-f-G-I-U-T")]         // Telecom facility (Mode 2)
+        [InlineData(DeviceRole.RouterClient, "a-f-G-I-U-T")]   // Telecom facility (Mode 2)
+        [InlineData(DeviceRole.Repeater, "a-f-G-I-U-T")]       // Telecom facility (Mode 2)
+        [InlineData(DeviceRole.Tracker, "a-f-G-E-S")]          // Sensor (Mode 2)
+        [InlineData(DeviceRole.LostAndFound, "a-f-G-E-S")]     // Sensor (Mode 2)
+        [InlineData(DeviceRole.Sensor, "a-f-G-E-S-E")]         // Electronic sensor (Mode 2)
+        [InlineData(DeviceRole.TakTracker, "a-f-G-E-S")]       // Sensor (Mode 2)
         public void GetCotTypeForRole_MapsCorrectly(DeviceRole role, string expectedType)
         {
             CotBuilder.GetCotTypeForRole(role).Should().Be(expectedType);
