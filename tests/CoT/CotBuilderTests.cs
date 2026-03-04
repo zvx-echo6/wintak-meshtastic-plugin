@@ -94,7 +94,7 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
         }
 
         [Fact]
-        public void BuildNodePli_ContainsTeamColor()
+        public void BuildNodePli_DoesNotContainGroupElement()
         {
             // Arrange
             var node = CreateTestNode();
@@ -105,15 +105,14 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
             var doc = new XmlDocument();
             doc.LoadXml(cotXml);
 
-            // Assert
+            // Assert - __group intentionally omitted to allow custom icons
+            // (team colors force colored dots that override usericon)
             var groupNode = doc.SelectSingleNode("/event/detail/__group");
-            groupNode.Should().NotBeNull();
-            groupNode!.Attributes!["name"]!.Value.Should().Be("Green");
-            groupNode.Attributes["role"]!.Value.Should().Be("Team Member");
+            groupNode.Should().BeNull();
         }
 
         [Fact]
-        public void BuildNodePli_ClientRole_UsesCorrectCotType()
+        public void BuildNodePli_ClientRole_UsesRadioUnitCotType()
         {
             // Arrange
             var node = CreateTestNode();
@@ -124,13 +123,13 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
             var doc = new XmlDocument();
             doc.LoadXml(cotXml);
 
-            // Assert
+            // Assert - Client uses Radio unit type (verified in WinTAK CoTtypes.xml)
             var eventNode = doc.SelectSingleNode("/event");
-            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-C");
+            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-U-S-R");
         }
 
         [Fact]
-        public void BuildNodePli_RouterRole_UsesInfrastructureCotType()
+        public void BuildNodePli_RouterRole_UsesTowerCotType()
         {
             // Arrange
             var node = CreateTestNode();
@@ -141,9 +140,9 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
             var doc = new XmlDocument();
             doc.LoadXml(cotXml);
 
-            // Assert
+            // Assert - Router uses Tower type (verified in WinTAK CoTtypes.xml)
             var eventNode = doc.SelectSingleNode("/event");
-            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-C-I");
+            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-I-U-T-com-tow");
         }
 
         [Fact]
@@ -284,15 +283,19 @@ namespace WinTakMeshtasticPlugin.Tests.CoT
         }
 
         [Theory]
-        [InlineData(DeviceRole.Client, "a-f-G-U-C")]
-        [InlineData(DeviceRole.ClientMute, "a-f-G-U-C")]
-        [InlineData(DeviceRole.Router, "a-f-G-U-C-I")]
-        [InlineData(DeviceRole.RouterClient, "a-f-G-U-C-I")]
-        [InlineData(DeviceRole.Repeater, "a-f-G-U-C-I")]
-        [InlineData(DeviceRole.Tracker, "a-f-G-E-S")]
-        [InlineData(DeviceRole.TakTracker, "a-f-G-E-S")]
-        [InlineData(DeviceRole.Sensor, "a-f-G-E-S")]
-        [InlineData(DeviceRole.Tak, "a-f-G-U-C")]
+        // Verified against WinTAK's C:\Program Files\WinTAK\Assets\cot\CoTtypes.xml
+        [InlineData(DeviceRole.Client, "a-f-G-U-U-S-R")]       // Radio unit
+        [InlineData(DeviceRole.ClientMute, "a-f-G-U")]         // Unit
+        [InlineData(DeviceRole.ClientHidden, "a-f-G-U")]       // Unit
+        [InlineData(DeviceRole.ClientBase, "a-f-G-I-c")]       // Civilian (lowercase c)
+        [InlineData(DeviceRole.Router, "a-f-G-I-U-T-com-tow")] // Tower
+        [InlineData(DeviceRole.RouterClient, "a-f-G-I-U-T-com-tow")] // Tower (ROUTER_LATE)
+        [InlineData(DeviceRole.Repeater, "a-f-G-I-U-T-com-tow")] // Tower
+        [InlineData(DeviceRole.Tracker, "a-f-G-E-S")]          // Sensor
+        [InlineData(DeviceRole.LostAndFound, "a-f-G-E-S")]     // Sensor
+        [InlineData(DeviceRole.Sensor, "a-f-G-E-S")]           // Sensor
+        [InlineData(DeviceRole.Tak, "a-f-G-U-C")]              // Combat
+        [InlineData(DeviceRole.TakTracker, "a-f-G-E-V")]       // Ground vehicle
         public void GetCotTypeForRole_MapsCorrectly(DeviceRole role, string expectedType)
         {
             CotBuilder.GetCotTypeForRole(role).Should().Be(expectedType);

@@ -397,16 +397,23 @@ namespace WinTakMeshtasticPlugin.CoT
                 }
             }
 
-            // Line 1: Node ID, Role, Channel
+            // Line 1: Node ID, Role, Channel (ALWAYS show all three)
             var line1 = new System.Collections.Generic.List<string>();
             line1.Add($"Node: {nodeState.NodeIdHex}");
-            if (nodeState.Role != DeviceRole.Client) // Only show if not default
-                line1.Add($"Role: {nodeState.Role}");
-            if (nodeState.PrimaryChannel >= 0)
-                line1.Add($"Ch: {nodeState.PrimaryChannel}");
+            line1.Add($"Role: {nodeState.Role}");
+            line1.Add($"Ch: {nodeState.PrimaryChannel}");
             lines.Add(string.Join(" | ", line1));
 
-            // Line 2: Battery and uptime
+            // Line 2: Hardware model and firmware (important identity info)
+            var hwLine = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrEmpty(nodeState.HardwareModel))
+                hwLine.Add($"HW: {nodeState.HardwareModel}");
+            if (!string.IsNullOrEmpty(nodeState.FirmwareVersion))
+                hwLine.Add($"FW: {nodeState.FirmwareVersion}");
+            if (hwLine.Count > 0)
+                lines.Add(string.Join(" | ", hwLine));
+
+            // Line 3: Battery and uptime
             var line2 = new System.Collections.Generic.List<string>();
             if (nodeState.DeviceTelemetry != null)
             {
@@ -458,16 +465,7 @@ namespace WinTakMeshtasticPlugin.CoT
             if (line4.Count > 0)
                 lines.Add(string.Join(" | ", line4));
 
-            // Line 5: Hardware and firmware
-            var line5 = new System.Collections.Generic.List<string>();
-            if (!string.IsNullOrEmpty(nodeState.HardwareModel))
-                line5.Add($"HW: {nodeState.HardwareModel}");
-            if (!string.IsNullOrEmpty(nodeState.FirmwareVersion))
-                line5.Add($"FW: {nodeState.FirmwareVersion}");
-            if (line5.Count > 0)
-                lines.Add(string.Join(" | ", line5));
-
-            // Line 6: Last heard
+            // Line 5: Last heard
             var lastHeardAge = DateTime.UtcNow - nodeState.LastHeard;
             if (lastHeardAge.TotalMinutes < 60)
                 lines.Add($"Heard: {lastHeardAge.TotalMinutes:F0}m ago");

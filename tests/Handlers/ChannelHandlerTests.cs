@@ -94,10 +94,10 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
             // Act
             _handler.HandleChannel(channel);
 
-            // Assert
+            // Assert - protobuf string defaults to empty string, not null
             _channelManagerMock.Verify(m => m.UpdateChannel(
                 2,
-                null,
+                "",
                 ChannelRole.Disabled,
                 false
             ), Times.Once);

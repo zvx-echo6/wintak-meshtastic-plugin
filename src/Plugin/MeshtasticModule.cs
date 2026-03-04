@@ -386,12 +386,6 @@ namespace WinTakMeshtasticPlugin.Plugin
             try
             {
                 string cotXml = _cotBuilder.BuildNodePli(nodeState);
-
-                // DEBUG: Log full CoT XML to verify usericon element is present
-                // Write to load.log so user can easily view it
-                WriteLog($"[ICON-DEBUG] Full CoT XML for {nodeState.DisplayName}:");
-                WriteLog(cotXml);
-
                 var xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(cotXml);
                 _cotMessageSender.Send(xmlDoc);

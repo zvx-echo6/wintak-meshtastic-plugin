@@ -251,8 +251,8 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
 
             var eventNode = xmlDoc.SelectSingleNode("/event");
             eventNode.Should().NotBeNull();
-            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-C"); // Default role
-            eventNode.Attributes["uid"]!.Value.Should().Contain("MESH-TEST-12345678");
+            eventNode!.Attributes!["type"]!.Value.Should().Be("a-f-G-U-U-S-R"); // Client = Radio unit (verified in WinTAK CoTtypes.xml)
+            eventNode.Attributes["uid"]!.Value.Should().Contain("MESH-12345678"); // Stable UID without connectionId
 
             var pointNode = xmlDoc.SelectSingleNode("/event/point");
             pointNode.Should().NotBeNull();
@@ -263,9 +263,9 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
             contactNode.Should().NotBeNull();
             contactNode!.Attributes!["callsign"]!.Value.Should().Be("TEST");
 
+            // __group intentionally omitted to allow custom icons (team colors override usericon)
             var groupNode = xmlDoc.SelectSingleNode("/event/detail/__group");
-            groupNode.Should().NotBeNull();
-            groupNode!.Attributes!["name"]!.Value.Should().Be("Cyan"); // Channel 0
+            groupNode.Should().BeNull();
         }
 
         private static MeshPacket CreatePacket(uint fromNodeId, Position position, uint channel = 0)

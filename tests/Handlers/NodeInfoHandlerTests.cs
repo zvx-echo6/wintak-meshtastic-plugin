@@ -65,7 +65,7 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
 
             nodeState.ShortName.Should().Be("NODE");
             nodeState.LongName.Should().Be("Test Node Device");
-            nodeState.HardwareModel.Should().Be("TloraV21p6");
+            nodeState.HardwareModel.Should().Be("TloraV211P6"); // Enum name from HardwareModel.TloraV211P6
             nodeState.Role.Should().Be(DeviceRole.Client);
         }
 

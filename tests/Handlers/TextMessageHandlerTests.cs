@@ -295,8 +295,9 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
             var message = "Test";
             var packet = CreateTextMessagePacket(0xABCDEF12, message, channel: 0);
 
+            // UID is now stable without connectionId to prevent duplicate markers on reconnect
             _cotBuilderMock.Setup(m => m.BuildGeoChat(
-                It.Is<string>(uid => uid == "MESH-TEST-ABCDEF12"),
+                It.Is<string>(uid => uid == "MESH-ABCDEF12"),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
@@ -310,7 +311,7 @@ namespace WinTakMeshtasticPlugin.Tests.Handlers
 
             // Assert
             receivedArgs.Should().NotBeNull();
-            receivedArgs!.SenderUid.Should().Be("MESH-TEST-ABCDEF12");
+            receivedArgs!.SenderUid.Should().Be("MESH-ABCDEF12");
         }
 
         private static MeshPacket CreateTextMessagePacket(uint fromNodeId, string message, uint channel = 0)
